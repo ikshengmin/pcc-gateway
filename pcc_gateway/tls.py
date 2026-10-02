@@ -38,9 +38,8 @@ falling back to a host interpreter or plaintext.
 import os
 from threading import Lock
 
-from pcc.extern import c_int64, c_ptr, extern, c_obj, c_rawptr
+from pcc.extern import c_int64, c_ptr, extern, c_obj
 from pcc.unsafe import (
-    abi_constant,
     call_i64_i64_ptr,
     cstr,
     dynamic_library_close,
@@ -49,7 +48,6 @@ from pcc.unsafe import (
     load_i64,
     load_i8,
     load_ptr,
-    ptr_add,
     ptr_to_int,
     stack_alloc,
     store_i64,
@@ -166,15 +164,13 @@ _PCC_TLS_REQ_INPUT3 = 144
 _PCC_TLS_REQ_INPUT3_LEN = 152
 
 _py_str_new = extern("py_str_new", (c_ptr, c_int64), c_obj)
-_py_str_utf8 = extern("py_str_utf8", (c_ptr,), c_rawptr)
-_py_str_byte_len = extern("py_str_byte_len", (c_ptr,), c_int64)
 
 
 class TlsProviderError(RuntimeError):
     """Configuration/ownership failure outside the nonblocking data path."""
 
 
-def _copy_bytes_to_storage(storage, data: bytes, length: int) -> None:
+def _copy_bytes_to_storage(storage: int, data: bytes, length: int) -> None:
     # Only managed indexing happens here. No managed interior address is
     # computed or hidden in a request across a safepoint, lock or foreign call.
     index = 0
@@ -183,7 +179,7 @@ def _copy_bytes_to_storage(storage, data: bytes, length: int) -> None:
         index += 1
 
 
-def _copy_text_to_storage(storage, value: str, capacity: int) -> int:
+def _copy_text_to_storage(storage: int, value: str, capacity: int) -> int:
     data = value.encode("utf-8")
     length = len(data)
     if length >= capacity:
@@ -696,16 +692,16 @@ class TlsProviderRegistry:
 
 
 class _PccNativeTlsContext:
-    def __init__(self, handle, certificate_id: str, is_client: bool = False) -> None:
-        self.handle = handle
+    def __init__(self, handle: int, certificate_id: str, is_client: bool = False) -> None:
+        self.handle: int = handle
         self.certificate_id = certificate_id
         self.released = False
         self.is_client = is_client
 
 
 class _PccNativeTlsSession:
-    def __init__(self, handle) -> None:
-        self.handle = handle
+    def __init__(self, handle: int) -> None:
+        self.handle: int = handle
         self.released = False
 
 
@@ -837,7 +833,7 @@ class PccNativeTlsProvider:
             self._state_lock.release()
         self._close_library(library)
 
-    def _begin_call(self):
+    def _begin_call(self) -> int:
         self._state_lock.acquire()
         try:
             if (
@@ -914,7 +910,7 @@ class PccNativeTlsProvider:
             self._state_lock.release()
         self._close_library(library)
 
-    def _request(self, request, operation: int) -> None:
+    def _request(self, request: int, operation: int) -> None:
         # Storage belongs to the operation caller; never return a helper alloca.
         offset = 0
         while offset < _PCC_TLS_REQUEST_BYTES:
@@ -924,14 +920,14 @@ class PccNativeTlsProvider:
         store_i64(request, _PCC_TLS_REQ_ABI, PCC_NATIVE_TLS_ABI_VERSION)
         store_i64(request, _PCC_TLS_REQ_OPERATION, operation)
 
-    def _invoke(self, operation: int, request) -> int:
+    def _invoke(self, operation: int, request: int) -> int:
         entrypoint = self._begin_call()
         try:
             return self._invoke_entrypoint(entrypoint, operation, request)
         finally:
             self._finish_call()
 
-    def _invoke_entrypoint(self, entrypoint, operation: int, request) -> int:
+    def _invoke_entrypoint(self, entrypoint: int, operation: int, request: int) -> int:
         status = call_i64_i64_ptr(entrypoint, operation, request)
         mirrored = load_i64(request, _PCC_TLS_REQ_STATUS)
         if mirrored != status:
@@ -949,7 +945,7 @@ class PccNativeTlsProvider:
             raise TlsProviderError("native TLS provider returned unknown status")
         return status
 
-    def _result(self, status: int, request, count: int = 0, server_name=""):
+    def _result(self, status: int, request: int, count: int = 0, server_name=""):
         error_code = load_i64(request, _PCC_TLS_REQ_ERROR)
         if status == TLS_ERROR:
             if error_code <= TLS_ERR_NONE or error_code > TLS_ERR_INTERNAL:
@@ -972,7 +968,7 @@ class PccNativeTlsProvider:
             server_name=server_name,
         )
 
-    def _read_text(self, request, storage, capacity: int) -> str:
+    def _read_text(self, request: int, storage: int, capacity: int) -> str:
         length = load_i64(request, _PCC_TLS_REQ_OUTPUT0_LEN)
         if length < 0 or length >= capacity:
             raise TlsProviderError("native TLS provider returned invalid text length")
@@ -1022,7 +1018,9 @@ class PccNativeTlsProvider:
                     "native TLS provider library SHA-256 mismatch"
                 )
 
-            library = dynamic_library_open(_py_str_utf8(library_path))
+            path_storage = stack_alloc(4097)
+            _copy_text_to_storage(path_storage, library_path, 4097)
+            library = dynamic_library_open(path_storage)
             if library is None or ptr_to_int(library) == 0:
                 raise TlsProviderError(
                     "native TLS provider library could not be opened"
@@ -1246,7 +1244,7 @@ class PccNativeTlsProvider:
             )
         return self._result(status, request, server_name=server_name)
 
-    def _session_request(self, request, operation: int, session) -> None:
+    def _session_request(self, request: int, operation: int, session) -> None:
         if not isinstance(session, _PccNativeTlsSession) or session.released:
             raise TlsProviderError("native TLS connection is released")
         self._request(request, operation)
@@ -1323,7 +1321,7 @@ class PccNativeTlsProvider:
                 return
             handle = session.handle
             session.released = True
-            session.handle = None
+            session.handle = 0
         finally:
             self._state_lock.release()
         try:
@@ -1343,7 +1341,7 @@ class PccNativeTlsProvider:
                 return
             handle = context.handle
             context.released = True
-            context.handle = None
+            context.handle = 0
         finally:
             self._state_lock.release()
         try:
@@ -1499,6 +1497,8 @@ class TlsGeneration:
     def retain(self):
         self._lock.acquire()
         try:
+            if self.is_client and self._retired:
+                raise TlsProviderError("TLS client context is closed")
             if self._references <= 0 or self._destroyed:
                 raise TlsProviderError("TLS generation is released")
             self._references += 1
@@ -1600,10 +1600,11 @@ class TlsClientContext(TlsGeneration):
         try:
             if self._retired or self._destroyed:
                 raise TlsProviderError("TLS client context is closed")
-            self._references += 1
         finally:
             self._lock.release()
-        return TlsChannel(self, fd, True)
+        # Acquire the lease inside the constructed channel, not before its
+        # allocation. retain() rechecks retirement under the same context lock.
+        return TlsChannel(self, fd)
 
     def close(self) -> int:
         return self.retire()

@@ -76,5 +76,27 @@
     "asyncio",
     "provider-owned poll or wait",
     "provider-owned threads"
-  ]
+  ],
+  "client_boundary": {
+    "status": "candidate-not-native-qualified",
+    "operations": {
+      "CLIENT_CONTEXT_CREATE": 11,
+      "CLIENT_CONNECTION_CREATE": 12
+    },
+    "request_bytes": 160,
+    "capabilities": [
+      "CLIENT",
+      "VERIFY_HOSTNAME"
+    ],
+    "implemented_platform_guard": "__linux__",
+    "verified_native_targets": [],
+    "peer_chain_verification": "mandatory",
+    "hostname_verification": "mandatory ASCII DNS SAN; no partial wildcards; no subject CN fallback",
+    "sni": "configured authenticated DNS name",
+    "trust_roots": "explicit absolute PEM path or OpenSSL system default verify paths",
+    "sigpipe_policy": "Linux client send(MSG_NOSIGNAL), no process signal changes",
+    "buffer_ownership": "caller-owned bounded raw staging; no managed interiors retained",
+    "cancellation_observation_ms": 25,
+    "build_ownership_gap": "Makefile defaults to external cc; no native pcc1 build qualification"
+  }
 }

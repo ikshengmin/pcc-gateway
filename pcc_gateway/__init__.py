@@ -135,6 +135,7 @@ from .tls import (
     PCC_NATIVE_TLS_ENTRY_SYMBOL,
     PCC_NATIVE_TLS_PROVIDER_NAME,
     PCC_TLS_REQUIRED_CAPABILITIES,
+    PCC_TLS_CLIENT_REQUIRED_CAPABILITIES,
     TLS_CLOSED,
     TLS_ERROR,
     TLS_INTEREST_NONE,
@@ -148,6 +149,8 @@ from .tls import (
     TlsCertificate,
     TlsChannel,
     TlsConfig,
+    TlsClientConfig,
+    TlsClientContext,
     TlsGeneration,
     TlsGenerationManager,
     TlsProviderError,
@@ -158,6 +161,7 @@ from .tls import (
     production_tls_registry,
     tls_error_name,
 )
+from .tls_client import NativeTlsClient, TlsClientError
 
 __all__ = [
     "BACKPRESSURE_NONE",
@@ -270,6 +274,7 @@ __all__ = [
     "PCC_NATIVE_TLS_ENTRY_SYMBOL",
     "PCC_NATIVE_TLS_PROVIDER_NAME",
     "PCC_TLS_REQUIRED_CAPABILITIES",
+    "PCC_TLS_CLIENT_REQUIRED_CAPABILITIES",
     "TLS_OK",
     "TLS_WANT_READ",
     "TLS_WANT_WRITE",
@@ -284,6 +289,10 @@ __all__ = [
     "TlsResult",
     "TlsCertificate",
     "TlsConfig",
+    "TlsClientConfig",
+    "TlsClientContext",
+    "NativeTlsClient",
+    "TlsClientError",
     "TlsProviderInfo",
     "TlsProviderRegistry",
     "PccNativeTlsProvider",

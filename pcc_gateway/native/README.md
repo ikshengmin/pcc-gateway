@@ -91,3 +91,109 @@ parent directory immutable to the gateway identity. A future same-fd/inode
 loader seam is required before claiming that race closed. A successful build
 alone is not live HTTPS evidence; the provider ABI canary and current-pcc1
 HTTPS gate must also complete.
+
+## Verified outbound client boundary (candidate)
+
+The same v1 dispatcher has additive `CLIENT_CONTEXT_CREATE` (11) and
+`CLIENT_CONNECTION_CREATE` (12) operations. Its request remains 160 bytes and
+old server operation numbers retain their meaning. Clients require both new
+`CLIENT` and `VERIFY_HOSTNAME` capability bits; an old server-only provider is
+rejected rather than used as an unauthenticated client. These client bits are
+currently advertised only on Linux. Darwin, Windows and ARM hardware execution
+have not been qualified; non-Linux client calls fail explicitly.
+
+`TlsClientConfig(server_name, ca_file="", alpn=("http/1.1",))` requires an ASCII
+DNS identity. It normalizes case/trailing dot, rejects wildcards and numeric
+identities, and does not perform IDNA conversion. A separately resolved numeric
+connect address never substitutes for the authenticated name. OpenSSL receives
+SNI, `SSL_set1_host`, `SSL_VERIFY_PEER`, and DNS SAN checking with
+`NO_PARTIAL_WILDCARDS | NEVER_CHECK_SUBJECT`. There is no insecure mode. A
+nonempty absolute `ca_file` selects PEM trust anchors; otherwise OpenSSL's
+system default verify paths are used. Trust-store load errors fail context
+creation; absent/unusable roots fail certificate verification during handshake.
+TLS 1.2–1.3 and security level 2 remain mandatory. Client ALPN must be offered
+and selected; absent or unoffered negotiation is an error.
+
+Linux client sessions attach one OpenSSL socket BIO using nonblocking `recv`
+and `send(..., MSG_NOSIGNAL)`. It translates EINTR/EAGAIN/EWOULDBLOCK to retry
+flags and preserves short reads/writes. It holds only a borrowed fd and frees
+its BIO/method after the SSL object, never closes the socket, changes signal
+handlers/masks, polls, or creates a thread. Existing server sessions retain
+their original process/socket-owner SIGPIPE prerequisite.
+
+### Storage and scheduling lifetime
+
+Each Python adapter operation allocates its own request and staging storage;
+initialization helpers receive that storage and return no stack address.
+Text is encoded and copied by managed indexing into bounded raw storage before
+any provider resource lock. Reads/writes use at most 64 KiB per native call;
+the application stream defaults to 16 KiB chunks. No managed string, bytes or
+bytearray interior pointer is placed in the dispatcher request. This is
+intentionally a bounded-copy implementation, not a zero-copy/performance claim.
+Only unmanaged operation-local storage crosses locks or the foreign dispatcher.
+After read completion, normal managed indexing copies bytes back to the current
+bytearray owner. The adapter does not retain an operation's raw storage after
+returning.
+
+A client write owns one immutable `pending` bytes value through all WANT_READ
+and WANT_WRITE retries and resubmits the same content and length. New content
+is selected only after actual positive progress. `SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER`
+permits the new staging address on each retry; it does not permit changing data.
+OpenSSL error classification occurs in the same C call/thread as the operation,
+before returning to a possibly migrating virtual thread. No asynchronous
+OpenSSL engine mode or managed callback is installed. These constraints follow
+the [OpenSSL error-queue contract](https://docs.openssl.org/3.0/man3/SSL_get_error/)
+and [write retry contract](https://docs.openssl.org/3.0/man3/SSL_write/).
+
+`TlsClientContext` reuses `TlsGeneration` reference counting: closing it prevents
+new channels, while existing channel leases keep the native context alive.
+`NativeTlsClient` uses the canonical `NativeSocketTransport` and PCC virtual
+thread readiness wait, with finite absolute connect/handshake/read/write/close
+deadlines. It accepts already-resolved numeric addresses. Only its owning
+virtual thread releases the fd/session; a different thread may mark cancellation,
+never close a parked descriptor. Concurrent operations fail explicitly. The
+current 25 ms cancellation observation slice is an interim latency/performance
+boundary, not final virtual-thread parity or throughput acceptance.
+
+### Evidence and remaining gates
+
+The initial 2026-10-02 bounded fixture-free check passed 70 TLS client/provider
+and package-surface tests, including the old server TLS lifetime suite. This is
+host model/source evidence only. Two later controls for constructor-allocation
+lease cleanup and the explicit native probe bring the final set to 72 passing
+cases. The unchanged-module owned-IR diagnostic
+stopped at the compiler's slot-call ownership boundary for a conditional
+keyword argument in `tls.py`; `tls_client.py` and `server.py` were not reached.
+No provider build, native handshake, actual certificate validation, socket
+execution, five-GC lifetime qualification, or performance measurement has run
+for this candidate. The Makefile's default host `cc` remains an explicit build
+ownership gap and must not count as a native pcc1-owned build.
+
+There are two concrete core substrate blockers beyond the compiler operand
+regression: the production static Linux runtime includes
+`freestanding_linux_static_loader.py`, whose `dlopen`/`dlsym` deliberately
+reject every request. `owned_elf_link.py` publishes static executables only;
+the public shared-library builder routes to Darwin arm64/libSystem-only
+`macho_shared.py`. Thus neither loading this provider into the canonical Linux
+runtime nor publishing its Linux `.so` with the owned linker is currently
+implemented. Do not bypass these gaps with host libdl, host cc or another TLS
+stack. The prepared native probe cannot pass until these boundaries are owned.
+
+`tests/fixtures/gateway/current_pcc1_tls_client.py` is an opt-in emitted-program
+control. It requires an explicit provider path/SHA-256, test-only CA, DNS name,
+loopback port and mode. It only connects to 127.0.0.1. A separate local peer must
+supply trusted echo, wrong hostname, untrusted chain, silent handshake, silent
+read, abrupt EOF and cancellation cases. Reuse the repository product canary's
+clearly test-only certificate setup; do not use credentials or external/live
+accounts. Run all controls on the final frozen compiler/runtime and each GC,
+then test provider/resource unload, repeated close, SNI/ALPN capture, partial
+I/O, default-SIGPIPE reset/disconnect survival, and descriptor/wait registration
+cleanup. A local host TLS peer is an oracle only, never the client owner.
+
+This stream is a reusable TLS substrate. DNS policy, HTTP response framing and
+lazy SSE decoding/composition still belong to their existing owners. In
+particular, this candidate alone does not implement or qualify Harness's
+`post_sse` transport or a complete HTTPS application client.
+Harness's cancellation token exposes `cancelled`/`require_active()`, while the
+gateway token exposes `is_cancelled()`/`deadline_ms`. Later HTTP/SSE composition
+requires one shared cancellation adapter; copying token state is not a bridge.

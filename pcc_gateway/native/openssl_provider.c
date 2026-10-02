@@ -590,6 +590,7 @@ failed:
 #endif
 }
 
+#if defined(__linux__)
 static int pcc_tls_dns_identity_valid(const char *name, size_t length)
 {
     size_t index;
@@ -616,6 +617,7 @@ static int pcc_tls_dns_identity_valid(const char *name, size_t length)
     /* IP literals require a separately declared IP-SAN capability. */
     return non_numeric && label_length != 0 && name[length - 1] != '-';
 }
+#endif
 
 static int64_t pcc_tls_connection_create(pcc_tls_provider_v1_request *request)
 {

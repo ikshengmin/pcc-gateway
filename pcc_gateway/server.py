@@ -13,7 +13,7 @@ numeric/hosts/DNS HTTP/1 upstreams.  TLS cryptography stays behind the reviewed
 native provider ABI; no Python ``ssl`` or host interpreter participates.
 """
 
-from pcc.extern import c_int64, c_ptr, extern, c_obj, c_rawptr
+from pcc.extern import c_int64, c_ptr, c_str, extern, c_obj, c_rawptr
 from pcc.unsafe import abi_constant, load_i64, null, ptr_add, stack_alloc
 import pcc.virtual_thread as virtual_thread
 import threading
@@ -93,7 +93,7 @@ _platform_socket_peer_text = extern(
     "pcc_platform_socket_peer_text", (c_int64, c_ptr, c_int64), c_int64
 )
 _platform_tcp_connect_start = extern(
-    "pcc_platform_tcp_connect_start", (c_ptr, c_ptr, c_ptr), c_int64
+    "pcc_platform_tcp_connect_start", (c_str, c_str, c_rawptr), c_int64
 )
 _platform_socket_connect_observe = extern(
     "pcc_platform_socket_connect_observe", (c_int64, c_int64), c_int64
@@ -238,8 +238,8 @@ class NativeSocketTransport:
             return -1
         output_fd = stack_alloc(8)
         outcome = _platform_tcp_connect_start(
-            _py_str_utf8(address),
-            _py_str_utf8(str(endpoint.port)),
+            address,
+            str(endpoint.port),
             output_fd,
         )
         fd = load_i64(output_fd, 0)

@@ -258,8 +258,10 @@ def test_native_provider_header_and_adapter_freeze_one_capability_checked_abi() 
     assert "dynamic_library_open" in source
     assert "_pcc_sha256_file_hex_bounded" in source
     assert source.index("_pcc_sha256_file_hex_bounded") < source.index(
-        "dynamic_library_open(_py_str_utf8(library_path))"
+        "dynamic_library_open(path_storage)"
     )
+    assert "_copy_text_to_storage(path_storage, library_path, 4097)" in source
+    assert "_py_str_utf8" not in source
     assert "library_path = self.library_path" in source
     assert "hashlib" not in source
     assert "missing required capabilities" in source
@@ -395,10 +397,11 @@ def test_native_provider_hashes_with_configured_bound_before_open(
         digest,
         raising=False,
     )
-    # CPython executes the host model in this test. The compiled provider
-    # route lowers this extern to the raw UTF-8 pointer required by dlopen;
-    # model that ABI conversion alongside the injected loader.
-    monkeypatch.setattr(tls_module, "_py_str_utf8", lambda value: value)
+    # The loader receives caller-owned raw staging storage, never a managed
+    # string interior. The native lifetime is checked separately from this
+    # host digest-before-open sequencing model.
+    monkeypatch.setattr(tls_module, "stack_alloc", lambda size: bytearray(size))
+    monkeypatch.setattr(tls_module, "store_i8", lambda base, offset, value: base.__setitem__(offset, value & 255))
     monkeypatch.setattr(tls_module, "dynamic_library_open", open_library)
     provider = PccNativeTlsProvider(
         "/opt/pcc/lib/pcc-tls-provider.so",
