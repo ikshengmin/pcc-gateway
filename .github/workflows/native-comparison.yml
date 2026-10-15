@@ -1,0 +1,132 @@
+name: Native pcc1 versus asyncio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.ci/pcc-native-source.json'
+      - '.ci/requirements-native-source.txt'
+      - '.github/workflows/native-comparison.yml'
+      - 'scripts/ci_native_build.py'
+      - 'scripts/ci_native_comparison.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One gateway-owned bootstrap at a time. Activation of the exact core pin is
+# coordinated after an already running core bootstrap, not a duplicate of it.
+concurrency:
+  group: gateway-native-comparison
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  native-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Check out exact gateway source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: gateway
+          persist-credentials: false
+      - name: Read immutable native PCC source pin
+        id: pcc
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, re
+          from pathlib import Path
+          pin = json.loads(Path('gateway/.ci/pcc-native-source.json').read_text())
+          assert pin['repository'] == 'ikshengmin/pcc'
+          assert pin['receipt_schema'] == 'pcc.platform-bootstrap.v1'
+          for field in ('commit', 'tree'):
+              assert re.fullmatch('[0-9a-f]{40}', pin[field])
+              print(field + '=' + pin[field])
+          PY
+      - name: Check out selected clean PCC source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ikshengmin/pcc
+          ref: ${{ steps.pcc.outputs.commit }}
+          path: pcc
+          persist-credentials: false
+      - name: Use declared CPython for verifier source qualification
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.15.0-rc.1'
+          allow-prereleases: true
+      - name: Install frozen core test dependencies only
+        run: python -m pip install --disable-pip-version-check --require-hashes -r gateway/.ci/requirements-native-source.txt
+      - name: Verify exact receipt controls with default six-worker loadgroup
+        env:
+          PCC_COMMIT: ${{ steps.pcc.outputs.commit }}
+          PCC_TREE: ${{ steps.pcc.outputs.tree }}
+        run: >-
+          python gateway/scripts/ci_native_build.py --validate-source
+          --pcc-source pcc --pcc-commit "$PCC_COMMIT" --pcc-tree "$PCC_TREE"
+          --output ci-results/native-source-tests
+      - name: Use the core Linux Stage1 host version
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Build and admit one source-matched native Stage1
+        env:
+          PCC_COMMIT: ${{ steps.pcc.outputs.commit }}
+          PCC_TREE: ${{ steps.pcc.outputs.tree }}
+        run: >-
+          python gateway/scripts/ci_native_build.py
+          --pcc-source pcc --pcc-commit "$PCC_COMMIT" --pcc-tree "$PCC_TREE"
+          --output ci-results/native-build
+      - name: Use the declared asyncio baseline version
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.15.0-rc.1'
+          allow-prereleases: true
+      - name: Install frozen validation dependencies only
+        run: python -m pip install --disable-pip-version-check --require-hashes -r gateway/.ci/requirements.txt
+      - name: Run native cleanup and matched repeated comparison
+        env:
+          PCC_COMMIT: ${{ steps.pcc.outputs.commit }}
+          PCC_TREE: ${{ steps.pcc.outputs.tree }}
+        run: >-
+          python gateway/scripts/ci_native_comparison.py
+          --pcc-source pcc --pcc-commit "$PCC_COMMIT" --pcc-tree "$PCC_TREE"
+          --pcc1 ci-results/native-build/bootstrap/shared/pcc1
+          --receipt ci-results/native-build/bootstrap/shared/receipt.json
+          --runtime ci-results/native-build/runtime/libpy_runtime_pcc_py.a
+          --output ci-results/native-comparison
+      - name: Preserve compiler bytes, receipts and raw measurements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gateway-native-${{ github.sha }}-${{ github.run_attempt }}
+          # Explicitly retain the compiler/runtime bytes that ordinary core CI
+          # does not upload. Do not archive the compiler's temporary caches.
+          path: |
+            ci-results/native-source-tests/
+            ci-results/native-build/report.json
+            ci-results/native-build/bootstrap.stdout
+            ci-results/native-build/bootstrap.stderr
+            ci-results/native-build/runtime/libpy_runtime_pcc_py.a*
+            ci-results/native-build/runtime-build/
+            ci-results/native-build/bootstrap/*.json
+            ci-results/native-build/bootstrap/*.log*
+            ci-results/native-build/bootstrap/*.resources.jsonl
+            ci-results/native-build/bootstrap/shared/pcc1
+            ci-results/native-build/bootstrap/shared/canary.py
+            ci-results/native-build/bootstrap/shared/canary1
+            ci-results/native-build/bootstrap/shared/*.json
+            ci-results/native-build/bootstrap/shared/*.log*
+            ci-results/native-build/bootstrap/shared/*.resources.jsonl
+            ci-results/native-build/bootstrap/gc0/*.json
+            ci-results/native-build/bootstrap/gc0/*.log*
+            ci-results/native-build/bootstrap/gc0/*.resources.jsonl
+            ci-results/native-build/bootstrap/gc0/canary.py
+            ci-results/native-build/bootstrap/gc0/canary1
+            ci-results/native-comparison/
+            ci-results/native-comparison-watchdog/
+          if-no-files-found: warn
+          retention-days: 14

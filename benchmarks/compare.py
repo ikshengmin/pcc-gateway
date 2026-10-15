@@ -243,18 +243,20 @@ def main():
             raise
 
 
-def compare(args, core, concurrencies, delays, parser):
-    build = ROOT / "benchmarks/build" / args.output.stem
+def compare(args, core, concurrencies, delays, parser, *, environment=None, artifact_validator=None,
+            pending_completion=False):
+    build = getattr(args, "build_dir", None) or ROOT / "benchmarks/build" / args.output.stem
     build.mkdir(parents=True, exist_ok=False)
-    env = dict(os.environ)
+    env = dict(os.environ if environment is None else environment)
     env.pop("LC_ALL", None)
     env.pop("PCC_PACKAGE_SITE", None)
     compiler_source = args.compiler_source.resolve() if args.compiler_source else core
     if args.compiler_source:
         env.update(PYTHONPATH=str(compiler_source), PCC_SOURCE_ROOT=str(compiler_source),
                    PCC_REPO_ROOT=str(compiler_source))
-    env.update(PCC_GC_BACKEND="0", PCC_WITH_THREADS="0", PCC_RUNTIME_HIGH="py",
-               PCC_DISABLE_BULK_GENERATOR_FRAME_INIT="1")
+    env.update(PCC_GC_BACKEND="0", PCC_WITH_THREADS="0", PCC_RUNTIME_HIGH="py")
+    if environment is None:
+        env["PCC_DISABLE_BULK_GENERATOR_FRAME_INIT"] = "1"
     if args.runtime_archive:
         env.update(PCC_RUNTIME_ARCHIVE=str(args.runtime_archive.resolve()),
                    PCC_RUNTIME_CC="/usr/bin/false")
@@ -360,7 +362,7 @@ def compare(args, core, concurrencies, delays, parser):
     # it is asked to compile cannot build this package at all, and refusing to
     # produce the host-pcc/asyncio sweep because of it loses the measurement
     # that is available.  The omission is recorded in the report.
-    arms = [("host-pcc", args.pcc)]
+    arms = [("host-pcc", args.pcc)] if args.pcc else []
     if str(args.pcc1 or "").strip().lower() not in ("", "none", "skip"):
         arms.append(("pcc1", args.pcc1))
     else:
@@ -376,6 +378,9 @@ def compare(args, core, concurrencies, delays, parser):
                 label, compiler, source, output, log,
                 env=env, report=report, report_path=args.output,
             )
+            if artifact_validator is not None:
+                report["compilers"][label]["dependencies"] = artifact_validator(output)
+                save(args.output, report)
 
     labels = list(commands)
     for delay in delays:
@@ -459,8 +464,8 @@ def compare(args, core, concurrencies, delays, parser):
     if observer and digest(observer["path"]) != observer["sha256"]:
         raise RuntimeError("resource observer changed during comparison")
     report["load_average_end"] = os.getloadavg() if hasattr(os, "getloadavg") else None
-    report["complete"] = True
-    report["status"] = "COMPLETE"
+    report["complete"] = not pending_completion
+    report["status"] = "PENDING_PROCESS_CLEANUP" if pending_completion else "COMPLETE"
     save(args.output, report)
     write_markdown(args.output, report)
     print(f"Saved {args.output}", flush=True)

@@ -230,6 +230,45 @@ def test_linux_observer_mutation_prevents_complete_report(comparison_fixture, mo
     assert not json.loads(args.output.read_text())["complete"]
 
 
+def test_strict_native_adapter_uses_only_pcc1_and_validates_artifact_before_running(comparison_fixture, monkeypatch):
+    args, core, _, called, _ = comparison_fixture
+    args.pcc = None
+    args.build_dir = args.output.parent / "explicit-build-outside-source"
+    compiled, validated = [], []
+    def compile_arm(label, compiler, source, output, log, **kwargs):
+        assert label == "pcc1"
+        assert kwargs["env"]["STRICT_FIXTURE"] == "1"
+        assert "PCC_DISABLE_BULK_GENERATOR_FRAME_INIT" not in kwargs["env"]
+        assert output.parent == args.build_dir
+        kwargs["report"]["compilers"][label] = {"synthetic": True}
+        compiled.append(output)
+        return ["synthetic:" + label]
+    def validate(output):
+        assert compiled == [output] and called == []
+        validated.append(output)
+        return {"synthetic_static_elf": True}
+    monkeypatch.setattr(compare, "compile_arm", compile_arm)
+    compare.compare(args, core, [2], [0], argparse.ArgumentParser(),
+                    environment={"STRICT_FIXTURE": "1"}, artifact_validator=validate,
+                    pending_completion=True)
+    report = json.loads(args.output.read_text())
+    assert report["status"] == "PENDING_PROCESS_CLEANUP" and report["complete"] is False
+    assert len(validated) == 1 and set(report["compilers"]) == {"pcc1"}
+    assert report["compilers"]["pcc1"]["dependencies"] == {"synthetic_static_elf": True}
+    assert {label for label, _ in called} == {"asyncio", "pcc1"}
+
+
+def test_strict_artifact_rejection_prevents_all_benchmark_execution(comparison_fixture, monkeypatch):
+    args, core, _, called, _ = comparison_fixture
+    args.pcc = None
+    def reject(output):
+        raise ValueError("artifact is not owned static ELF")
+    with pytest.raises(ValueError, match="static ELF"):
+        compare.compare(args, core, [2], [0], argparse.ArgumentParser(),
+                        environment={}, artifact_validator=reject)
+    assert called == [] and not json.loads(args.output.read_text())["complete"]
+
+
 @pytest.mark.parametrize("p99,expected", [(None, "n/a"), (0.0, "0.000")])
 def test_report_accepts_legacy_summary_without_p99(tmp_path, p99, expected):
     row = {
