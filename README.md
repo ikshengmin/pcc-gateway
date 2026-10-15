@@ -50,35 +50,19 @@ Native integration tests run separately;
 
 ## Performance and qualification
 
+The goal is for native pcc1 built from the latest source to outperform
+CPython asyncio on equivalent work, preserving Python semantics, child-task
+cleanup and all five GC contracts.
+
+**Latest-source measurement is pending.** A matching compiler/runtime pair
+must pass native admission and execution before a controlled, same-machine
+comparison can establish throughput, latency and memory results.
+
 At gateway revision `87c427af`, [host CI](https://github.com/ikshengmin/pcc-gateway/actions/runs/38679074097)
 passed **394 tests**, with **23 integration tests deselected**. This checks
 host contracts and benchmark reporting, not native throughput. Current-source
-native admission/execution, five-GC qualification and a controlled comparison
-with CPython asyncio remain separate gates; see the [CI scope](docs/ci.md).
-There is no current-source measurement establishing a native pcc1 performance
-win over asyncio.
-
-### Recorded handler benchmark — 2026-09-18
-
-The most recent committed [handler comparison](benchmarks/results/2026-09-18-selfhost-gates.md)
-contains **90 validated runs** on Apple M2 Max, macOS 26.5.1 and
-CPython 3.15.0rc1. At zero child wait and concurrency 100, medians across five
-repeats were:
-
-| Host pcc requests/s | pcc1 requests/s | CPython asyncio TaskGroup requests/s |
-|---:|---:|---:|
-| 19,245.5 | 18,998.1 | 86,584.7 |
-
-This historical run left the high-concurrency target unmet. Each request ran
-two children, joined them and validated the same JSON bytes. It measured
-handler batches on one carrier/event loop, excluding HTTP sockets,
-compilation and startup; process peak RSS includes startup and warmups.
-
-The [raw receipt](benchmarks/results/2026-09-18-selfhost-gates.json) identifies
-a dirty core source snapshot and the recorded pcc1/runtime pair. Applications
-used the self backend, no libpython and GC0. The receipt does not qualify
-today's compiler, a fresh runtime build, runtime-emitter ownership, all five
-collectors or a self-hosted fixed point. It also predates p99 reporting.
+native execution and full five-GC qualification remain open; see the
+[CI scope](docs/ci.md).
 
 See [benchmark methods and historical receipts](benchmarks/README.md) for
-reproduction requirements, earlier comparisons and their artifact identities.
+reproduction requirements and earlier experiments.
