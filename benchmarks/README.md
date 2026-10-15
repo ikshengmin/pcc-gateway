@@ -5,14 +5,40 @@ Use Python **3.15.0rc1**, a compatible compiler/runtime pair, a quiet machine
 and a new output name. The runners acquire the core performance lock and
 reject source/archive changes during a measurement.
 
-## Latest measurement — 2026-09-14
+## Measurement status
+
+Current-source native performance remains unqualified. A passing host CI or
+benchmark-reporting test does not establish pcc1 execution or a win over
+asyncio; see the [current qualification scope](../docs/ci.md).
+
+### Recorded handler comparison — 2026-09-18
+
+The most recent committed [comparison](results/2026-09-18-selfhost-gates.md)
+contains **90 validated runs**. Zero-wait C100 medians are 19,245.5 requests/s
+for host pcc, 18,998.1 for pcc1 and 86,584.7 for CPython asyncio TaskGroup.
+These are handler batches on Apple M2 Max, macOS 26.5.1 and CPython 3.15.0rc1,
+with five repeats, two children per request, validated JSON, GC0 and one
+carrier/event loop. HTTP sockets, compilation and startup are outside the
+batch timer.
+
+The [raw receipt](results/2026-09-18-selfhost-gates.json) records clean gateway
+source `2d260f82`, core base `5b318560` plus dirty source, and the exact native
+compiler and application-runtime identities.
+Both application compiler commands selected self/no-libpython. The runtime
+hash does not identify its member emitters, and this comparison is not a
+fresh runtime-build, full Stage1, fixed-point or five-GC qualification.
+The receipt predates p99 reporting; missing p99 remains unavailable.
+Its results do not describe current compiler performance.
+
+### Earlier six-arm comparison — 2026-09-14
 
 [Six arms, 180 validated runs](results/2026-09-14-six-arm/README.md): zero-wait
-C100 medians are 18,075 requests/s for host pcc, 18,092 for pcc1, 9,087 for
+C100 medians were 18,075 requests/s for host pcc, 18,092 for pcc1, 9,087 for
 the pcc1 asyncio/vthread prototype, and 82,007 for CPython asyncio TaskGroup.
-Both native compilers used the same prebuilt, self-emitted runtime. The native
-compiler is an experimental U artifact; its source and qualification limits
-are recorded alongside the results. This run did not rebuild the runtime.
+The host-pcc and pcc1 compiler arms used the same prebuilt, self-emitted
+runtime. The native compiler was an experimental U artifact; its source and
+qualification limits are recorded alongside the results. This run did not
+rebuild the runtime.
 
 ## Prepare the runtime
 
@@ -133,7 +159,7 @@ as well as QPS when attributing a change.
 
 ## Compiler memory follow-up (2026-09-09)
 
-The [latest owner checkpoint](results/2026-09-09-owner-checkpoint.json) records
+The [recorded owner checkpoint](results/2026-09-09-owner-checkpoint.json) records
 the newer tuple/temporary-owner/GC4 fixes, native optimizer gate and failed
 compiler builds. The earlier normal-mode [90-run comparison](results/2026-09-09-owner-final-three-way.json)
 uses pcc1 `b45582507e80` and runtime `1ee0b1bb5e2b`; C100 is 56,443 versus
@@ -159,7 +185,13 @@ compilation and handler measurements are recorded separately.
 
 ## Recorded results
 
-- [Main README](../README.md): published performance table.
+- [Main README](../README.md#performance-and-qualification): qualification status
+  and the recorded 2026-09-18 handler comparison.
+- [2026-09-10 LLVM-assisted reference](results/2026-09-10-reproduce-clean/README.md):
+  historical external-LLVM runtime construction, with the original measurements
+  and scope correction. Related [throughput](results/2026-09-10-object-start-inline/README.md)
+  and [memory](results/2026-09-10-ownership-leaks/README.md) receipts retain the
+  experiment history; they do not establish current LLVM-free performance.
 - [2026-09-08 memory-promotion A/B](results/2026-09-08-owned-mem2reg-runtime-ab.json)
   and [five-pass A/B](results/2026-09-08-owned-five-pass-runtime-ab.json):
   complete recorded runs, with identities and limits in each receipt.
