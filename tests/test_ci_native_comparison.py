@@ -219,6 +219,41 @@ def test_cleanup_canary_requires_real_compile_artifact_and_exact_marker(tmp_path
         assert result["artifact_sha256"] == ci.sha(result["artifact"])
 
 
+@pytest.mark.parametrize("failure", ["timeout", "interruption"])
+def test_cleanup_compile_logs_survive_abnormal_exit(tmp_path, monkeypatch, failure):
+    calls = []
+    compiler = tmp_path / "selected-pcc1"
+    stdout = "native compiler progress\n"
+    stderr = "native compiler diagnostic\n"
+
+    def command(argv, **kwargs):
+        calls.append(argv)
+        assert kwargs["timeout"] == 300
+        # Model output already emitted by the child before it is stopped.
+        # The captured-output implementation loses it on either exception.
+        for name, value in (("stdout", stdout), ("stderr", stderr)):
+            stream = kwargs.get(name)
+            if stream is not None:
+                stream.write(value)
+                stream.flush()
+                assert Path(stream.name).read_text() == value
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, 300, output=stdout.encode(), stderr=stderr.encode())
+        raise KeyboardInterrupt("stop compile")
+
+    def dependency(path):
+        pytest.fail("an incomplete compile must never reach artifact admission")
+
+    monkeypatch.setattr(ci, "run_command", command)
+    error = subprocess.TimeoutExpired if failure == "timeout" else KeyboardInterrupt
+    with pytest.raises(error):
+        ci.run_cleanup_canary(compiler, {}, tmp_path, dependency)
+    assert len(calls) == 1
+    assert (tmp_path / "cleanup-compile.stdout").read_text() == stdout
+    assert (tmp_path / "cleanup-compile.stderr").read_text() == stderr
+    assert not (tmp_path / "cleanup-run.stdout").exists()
+
+
 @pytest.mark.parametrize("failure", ["incomplete", "host", "skip", "repeat", "warmup", "missing-cell",
     "duplicate-cell", "missing-run", "repetition", "missing-memory", "bad-count", "bad-latency", "nan-qps", "zero-qps", "no-p99"])
 def test_selection_cannot_accept_missing_or_invalid_native_work(tmp_path, failure):

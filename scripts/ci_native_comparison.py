@@ -165,9 +165,12 @@ def run_cleanup_canary(compiler, env, output, dependency_receipt):
     artifact = output / "structured-scope-canary"
     command = [str(compiler), "--backend", "self", "--python-libpython", "off",
                "--ir-scaffold", "on", str(source), "-o", str(artifact)]
-    compiled = run_command(command, cwd=ROOT, env=env, timeout=300, text=True, capture_output=True)
-    (output / "cleanup-compile.stdout").write_text(compiled.stdout)
-    (output / "cleanup-compile.stderr").write_text(compiled.stderr)
+    # Keep output emitted before a timeout or interruption. Captured pipes
+    # only reach the following code when run_command returns successfully.
+    with (output / "cleanup-compile.stdout").open("w") as stdout, \
+            (output / "cleanup-compile.stderr").open("w") as stderr:
+        compiled = run_command(command, cwd=ROOT, env=env, timeout=300, text=True,
+                               stdout=stdout, stderr=stderr)
     if compiled.returncode:
         raise RuntimeError("native structured failure-cleanup canary compilation failed")
     dependencies = dependency_receipt(artifact)
