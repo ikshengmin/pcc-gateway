@@ -110,6 +110,7 @@ def orchestration(tmp_path, monkeypatch):
         assert state["locked"] and selected == compiler
         assert env["PCC_RUNTIME_CC"] == "/usr/bin/false"
         assert not Path(env["PCC_HOST_PYTHON"]).exists()
+        assert env["PCC_DIRECT_INDEXED_KERNEL_CAPTURE"] == env["PCC_DIRECT_INDEXED_KERNEL_EMIT"] == "1"
         calls.append("cleanup")
         return {"artifact": str(canary), "artifact_sha256": ci.sha(canary)}
 
@@ -125,6 +126,7 @@ def orchestration(tmp_path, monkeypatch):
                                                           "dependencies": {"format": "ELF"}}
         assert kwargs["pending_completion"] is True
         assert "PCC_DISABLE_BULK_GENERATOR_FRAME_INIT" not in kwargs["environment"]
+        assert kwargs["environment"]["PCC_DIRECT_INDEXED_NATIVE_OBJECT"] == "1"
         calls.append("compare")
         measured = matrix(artifact)
         measured.update(status="PENDING_PROCESS_CLEANUP", complete=False)
@@ -266,6 +268,21 @@ def test_environment_preserves_guard_but_drops_experiments(monkeypatch):
     assert env["PCC_WORKER_TREE_BUDGET_BYTES"] == "2147483648"
     assert env["PCC_WORKER_TREE_STATE_PATH"] == "/guard/state.tsv"
     assert env["PCC_WITH_THREADS"] == "0" and env["PCC_REFCOUNT_KIND"] == "atomic"
+
+
+def test_native_compile_route_matches_platform_canary_without_changing_admission(tmp_path):
+    admitted = {"PCC_RUNTIME_CC": "pcc", "PCC_WORKER_TREE_BUDGET_BYTES": "2147483648",
+                "PCC_PYTHON_IR_PASSES": "off", "PCC_RUNTIME_ARCHIVE": "/exact/runtime.a"}
+    before = dict(admitted)
+    actual = ci.native_compile_environment(admitted, tmp_path)
+    assert admitted == before
+    assert {key: value for key, value in actual.items() if key not in before or before[key] != value} == {
+        "PCC_RUNTIME_CC": "/usr/bin/false", "PCC_HOST_PYTHON": str(tmp_path / "forbidden-host-python"),
+        "PCC_DIRECT_INDEXED_KERNEL_CAPTURE": "1", "PCC_DIRECT_INDEXED_KERNEL_EMIT": "1",
+        "PCC_DIRECT_INDEXED_NATIVE_OBJECT": "1",
+    }
+    assert actual["PCC_WORKER_TREE_BUDGET_BYTES"] == "2147483648"
+    assert actual["PCC_PYTHON_IR_PASSES"] == "off"
 
 
 @pytest.mark.parametrize("accepted", [False, True])

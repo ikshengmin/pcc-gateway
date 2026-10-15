@@ -60,6 +60,22 @@ def environment(core, runtime):
     return env
 
 
+def native_compile_environment(admitted_environment, output):
+    """Use the platform producer's native-canary emission route explicitly.
+
+    The baseline admission profile is unchanged. Capture/emission select the
+    owned indexed path rather than the ordinary text render/parse path; native
+    object output is the producer's existing default. No diagnostic pass,
+    deferred owner or larger resource budget is introduced.
+    """
+    return dict(admitted_environment,
+                PCC_RUNTIME_CC="/usr/bin/false",
+                PCC_HOST_PYTHON=str(output / "forbidden-host-python"),
+                PCC_DIRECT_INDEXED_KERNEL_CAPTURE="1",
+                PCC_DIRECT_INDEXED_KERNEL_EMIT="1",
+                PCC_DIRECT_INDEXED_NATIVE_OBJECT="1")
+
+
 def selection(args):
     core, output = args.pcc_source.resolve(strict=True), args.output.resolve()
     if sys.platform != "linux" or platform.machine().lower() not in ("x86_64", "amd64"):
@@ -196,8 +212,7 @@ def run(args):
         save(output / "report.json", report)
         # Missing runtime bytes must fail rather than silently provisioning a
         # replacement, and native compilation must not invoke a host Python.
-        run_env = dict(env, PCC_RUNTIME_CC="/usr/bin/false",
-                       PCC_HOST_PYTHON=str(output / "forbidden-host-python"))
+        run_env = native_compile_environment(env, output)
         report["execution_environment"] = {k: v for k, v in run_env.items() if k.startswith("PCC_")}
         validate_application = lambda path: application_receipt(verifier, path)
         with producer.performance_lock():

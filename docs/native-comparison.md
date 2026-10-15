@@ -32,7 +32,12 @@ counts and zero-skip requirement. These are source controls, not native proof.
    builds and executes the structured failure/cancellation/rejected-fork canary.
    It then builds the ordinary `benchmark_native.py`. Both emitted programs
    must be static ELF artifacts. Host Python and runtime rebuilding are disabled
-   for those native compilation commands.
+   for those native compilation commands. Their execution environment explicitly
+   enables `PCC_DIRECT_INDEXED_KERNEL_CAPTURE`, `PCC_DIRECT_INDEXED_KERNEL_EMIT`
+   and native-object output, matching the platform producer's native-canary
+   route. Admission keeps the original baseline profile. Both report layers
+   record the selected emission flags; this is not an ordinary text-route
+   compile-speed measurement or a larger compile-time allowance.
 5. Native pcc1 and asyncio TaskGroup execute the same two-child / sorted-JSON
    work at concurrency 1, 10 and 100, with 0 and 100 ms waits. There are five
    repeats per cell, rotating arm order, two warmup batches, at least 5,000
