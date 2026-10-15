@@ -21,7 +21,6 @@ def test_workflow_is_host_only_source_pinned_and_always_retains_evidence():
     text = (ROOT / ".github/workflows/host-ci.yml").read_text()
     assert "pull_request:" in text and "branches: [main]" in text
     assert "contents: read" in text and "write" not in text
-    assert "python-version-file: gateway/.python-version" in text
     assert "ci_gateway.py host --pcc-source pcc" in text
     assert "if: always()" in text
     assert "--require-hashes" in text
@@ -33,6 +32,19 @@ def test_workflow_is_host_only_source_pinned_and_always_retains_evidence():
     assert pin["repository"] == "ikshengmin/pcc"
     assert re.fullmatch("[a-f0-9]{40}", pin["commit"])
     assert re.fullmatch("[a-f0-9]{40}", pin["tree"])
+
+
+def test_installer_semver_spelling_matches_exact_declared_python():
+    text = (ROOT / ".github/workflows/host-ci.yml").read_text()
+    declared = (ROOT / ".python-version").read_text().strip()
+    # The pinned setup-python action otherwise normalizes rc1 to -rc1,
+    # which cannot match the official python-versions manifest's -rc.1.
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)(a|b|rc)(\d+)", declared)
+    assert match is not None
+    base, release, number = match.groups()
+    expected = f"{base}-{release}.{number}"
+    assert f"python-version: '{expected}'" in text
+    assert "python-version-file:" not in text
 
 
 def test_requirements_are_the_frozen_pytest_only_subset():
