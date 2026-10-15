@@ -23,9 +23,13 @@ import tempfile
 try:
     from .processes import run_command
     from .protocol import WORKLOAD_SCOPE, validate_measurement
+    from .resource_usage import (SCOPE as LINUX_RESOURCE_SCOPE, linux_timer_identity,
+                                 load_metrics, timed_command as linux_timed_command)
 except ImportError:
     from processes import run_command
     from protocol import WORKLOAD_SCOPE, validate_measurement
+    from resource_usage import (SCOPE as LINUX_RESOURCE_SCOPE, linux_timer_identity,
+                                load_metrics, timed_command as linux_timed_command)
 import time
 
 
@@ -291,6 +295,7 @@ def compare(args, core, concurrencies, delays, parser):
                     for path in sorted([
                         ROOT / "benchmark_native.py", ROOT / "benchmark_asyncio.py", Path(__file__).resolve(),
                         ROOT / "benchmarks/processes.py", ROOT / "benchmarks/protocol.py",
+                        ROOT / "benchmarks/resource_usage.py",
                         *ROOT.glob("pcc_gateway/**/*.py")])},
         "workload": "Two child waits, TaskScope/TaskGroup barrier, identical sorted JSON bytes; no HTTP/socket I/O",
         "measurement_scope": WORKLOAD_SCOPE,
@@ -304,7 +309,8 @@ def compare(args, core, concurrencies, delays, parser):
             "PCC_DIRECT_INDEXED_NATIVE_OBJECT")},
         "warmup_batches": 2,
         "memory_scope": ("Darwin /usr/bin/time per-process peak RSS, including startup and warmups"
-                         if sys.platform == "darwin" else "unavailable: no process resource collector on this platform"),
+                         if sys.platform == "darwin" else LINUX_RESOURCE_SCOPE
+                         if sys.platform == "linux" else "unavailable: no process resource collector on this platform"),
         "rounds": args.rounds,
         "zero_delay_requests": args.zero_delay_requests,
         "repeats": args.repeats,
@@ -330,6 +336,11 @@ def compare(args, core, concurrencies, delays, parser):
         }
     save(args.output, report)
     args.output.with_suffix(".md").write_text("Comparison in progress; no complete results yet.\n")
+    if sys.platform == "linux":
+        report["resource_observer"] = linux_timer_identity()
+        # GNU time's numeric fields must be JSON numbers in every locale.
+        env["LC_NUMERIC"] = "C"
+        save(args.output, report)
     commands = {"asyncio": [sys.executable, str(ROOT / "benchmark_asyncio.py")]}
     workloads = [("", ROOT / "benchmark_native.py")]
     if args.include_asyncio_vthread:
@@ -380,6 +391,11 @@ def compare(args, core, concurrencies, delays, parser):
                     command = commands[label] + [str(concurrency), str(delay), str(rounds)]
                     timed_command = (["/usr/bin/time", "-lp", *command]
                                      if sys.platform == "darwin" else command)
+                    resource_path = None
+                    if sys.platform == "linux":
+                        resource_path = build / f"{label}-c{concurrency}-d{delay}-r{repetition}.resources.json"
+                        timed_command = linux_timed_command(command, resource_path,
+                                                            report["resource_observer"])
                     report["active_run"] = {"implementation": label, "command": timed_command,
                                             "concurrency": concurrency, "delay_ms": delay,
                                             "repetition": repetition, "rounds": rounds}
@@ -396,7 +412,16 @@ def compare(args, core, concurrencies, delays, parser):
                         raise RuntimeError(f"invalid/incomplete {label} measurements: {exc}") from exc
                     measured.update(implementation=label, repetition=repetition)
                     measured["load_average"] = os.getloadavg() if hasattr(os, "getloadavg") else None
-                    measured.update(process_metrics(ran.stderr))
+                    if resource_path is None:
+                        measured.update(process_metrics(ran.stderr))
+                    else:
+                        try:
+                            measured.update(load_metrics(resource_path, command, returncode=ran.returncode))
+                        except (OSError, ValueError) as exc:
+                            raise RuntimeError(f"invalid/incomplete {label} resources: {exc}") from exc
+                        measured["resource_receipt"] = {"path": str(resource_path),
+                                                        "sha256": digest(resource_path),
+                                                        "command": command}
                     report["runs"].append(measured)
                     report.pop("active_run", None)
                     save(args.output, report)
@@ -426,6 +451,13 @@ def compare(args, core, concurrencies, delays, parser):
             raise RuntimeError("workload or runner source changed during comparison: " + path)
     if args.runtime_archive and digest(args.runtime_archive) != report["application_runtime"]["sha256"]:
         raise RuntimeError("application runtime changed during comparison")
+    for row in report["runs"]:
+        resource = row.get("resource_receipt")
+        if resource and digest(resource["path"]) != resource["sha256"]:
+            raise RuntimeError("command resource receipt changed during comparison")
+    observer = report.get("resource_observer")
+    if observer and digest(observer["path"]) != observer["sha256"]:
+        raise RuntimeError("resource observer changed during comparison")
     report["load_average_end"] = os.getloadavg() if hasattr(os, "getloadavg") else None
     report["complete"] = True
     report["status"] = "COMPLETE"

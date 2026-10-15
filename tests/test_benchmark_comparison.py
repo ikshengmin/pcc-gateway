@@ -3,12 +3,14 @@
 import argparse
 import asyncio
 import json
+from pathlib import Path
 import subprocess
 
 import pytest
 
 import benchmark_asyncio as oracle
 from benchmarks import compare
+from benchmarks import resource_usage
 from benchmarks.protocol import validate_measurement
 
 
@@ -19,6 +21,7 @@ def comparison_fixture(tmp_path, monkeypatch):
     for name in (
         "benchmark_native.py", "benchmark_asyncio.py", "benchmark_asyncio_gather.py",
         "benchmarks/compare.py", "benchmarks/processes.py", "benchmarks/protocol.py",
+        "benchmarks/resource_usage.py",
         "benchmarks/prototypes/benchmark_asyncio_gather_vthread.py",
         "benchmarks/prototypes/asyncio_vthread.py",
     ):
@@ -32,6 +35,13 @@ def comparison_fixture(tmp_path, monkeypatch):
     monkeypatch.setattr(compare, "git", lambda *args, **kwargs: None)
     monkeypatch.setattr(compare.platform, "processor", lambda: "synthetic CPU")
     monkeypatch.setattr(compare.subprocess, "check_output", lambda *args, **kwargs: "synthetic CPU\n")
+    timer = root / "synthetic-time"
+    timer.write_bytes(b"synthetic timer fixture, never executed")
+    monkeypatch.setattr(compare, "linux_timer_identity", lambda: {
+        "path": str(timer), "sha256": compare.digest(timer),
+        "collector": resource_usage.COLLECTOR, "version": "synthetic GNU Time",
+        "numeric_locale": "C",
+    })
 
     args = argparse.Namespace(
         pcc="synthetic-pcc", pcc1="synthetic-pcc1", compiler_source=None,
@@ -63,6 +73,20 @@ def comparison_fixture(tmp_path, monkeypatch):
             "latencies_ms": [value + offset for value in values],
         }
         measured.update(amendments)
+        if compare.sys.platform == "linux":
+            separator = command.index("--")
+            resource_path = command[command.index("--output") + 1]
+            receipt = {"schema": resource_usage.SCHEMA, "collector": resource_usage.COLLECTOR,
+                       "command_sha256": resource_usage.command_digest(command[separator + 1:]),
+                       "returncode": 0, "metrics": {
+                           "process_real_seconds": 3.0,
+                           "process_user_seconds": 0.5,
+                           "process_sys_seconds": 0.1,
+                           "process_peak_rss_kib": (10 + repetition) * 1024,
+                           "process_voluntary_context_switches": 2,
+                           "process_involuntary_context_switches": 1,
+                       }}
+            Path(resource_path).write_text(json.dumps(receipt))
         return subprocess.CompletedProcess(command, 0, json.dumps(measured), "")
 
     monkeypatch.setattr(compare, "compile_arm", compile_arm)
@@ -71,7 +95,9 @@ def comparison_fixture(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("prototype", [False, True])
-def test_comparison_pools_p99_in_milliseconds_for_each_named_arm(comparison_fixture, prototype):
+@pytest.mark.parametrize("system", ["linux", "darwin"])
+def test_comparison_pools_p99_in_milliseconds_for_each_named_arm(comparison_fixture, monkeypatch, prototype, system):
+    monkeypatch.setattr(compare.sys, "platform", system)
     args, core, labels, called, _ = comparison_fixture
     args.include_asyncio_vthread = prototype
     if prototype:
@@ -101,6 +127,8 @@ def test_comparison_pools_p99_in_milliseconds_for_each_named_arm(comparison_fixt
         assert row["p50_ms"] == pytest.approx(10.5 + offset)
         assert row["p95_ms"] == pytest.approx(68.05 + offset)
         assert row["p99_ms"] == pytest.approx(813.61 + offset)
+        if compare.sys.platform == "linux":
+            assert row["process_peak_rss_bytes_median"] == 10.5 * 1024**2
         assert f"| {10.5 + offset:.3f} | {68.05 + offset:.3f} | {813.61 + offset:.3f} |" in markdown
 
 
@@ -119,6 +147,87 @@ def test_incomplete_work_never_reaches_comparison_summary(comparison_fixture, am
     assert called == [("asyncio", 0)]
     assert report["runs"] == report["summary"] == []
     assert report["complete"] is False
+
+
+@pytest.mark.parametrize("change", ["missing", "malformed", "wrong-command", "missing-rss"])
+def test_incomplete_linux_resources_never_reach_summary(comparison_fixture, monkeypatch, change):
+    args, core, _, called, _ = comparison_fixture
+    monkeypatch.setattr(compare.sys, "platform", "linux")
+    run = compare.run_command
+
+    def altered(command, **kwargs):
+        result = run(command, **kwargs)
+        path = Path(command[command.index("--output") + 1])
+        row = json.loads(path.read_text())
+        if change == "missing":
+            path.unlink()
+        elif change == "malformed":
+            path.write_text("not json")
+        else:
+            if change == "wrong-command":
+                row["command_sha256"] = resource_usage.command_digest(["another-arm"])
+            else:
+                del row["metrics"]["process_peak_rss_kib"]
+            path.write_text(json.dumps(row))
+        return result
+
+    monkeypatch.setattr(compare, "run_command", altered)
+    with pytest.raises(RuntimeError, match="invalid/incomplete asyncio resources"):
+        compare.compare(args, core, [2], [0], argparse.ArgumentParser())
+    report = json.loads(args.output.read_text())
+    assert called == [("asyncio", 0)]
+    assert report["runs"] == report["summary"] == []
+    assert report["complete"] is False
+
+
+def test_linux_resource_receipt_mutation_prevents_complete_report(comparison_fixture, monkeypatch):
+    args, core, _, _, _ = comparison_fixture
+    monkeypatch.setattr(compare.sys, "platform", "linux")
+    run = compare.run_command
+    receipts = []
+
+    def mutate_previous(command, **kwargs):
+        result = run(command, **kwargs)
+        receipts.append(Path(command[command.index("--output") + 1]))
+        if len(receipts) == 2:
+            receipts[0].write_text("changed after admission")
+        return result
+
+    monkeypatch.setattr(compare, "run_command", mutate_previous)
+    with pytest.raises(RuntimeError, match="resource receipt changed"):
+        compare.compare(args, core, [2], [0], argparse.ArgumentParser())
+    assert not json.loads(args.output.read_text())["complete"]
+
+
+def test_unavailable_linux_observer_fails_before_compiling(comparison_fixture, monkeypatch):
+    args, core, _, called, _ = comparison_fixture
+    monkeypatch.setattr(compare.sys, "platform", "linux")
+
+    def unavailable():
+        raise RuntimeError("Linux resource collection requires native GNU time")
+
+    monkeypatch.setattr(compare, "linux_timer_identity", unavailable)
+    monkeypatch.setattr(compare, "compile_arm", lambda *a, **k: pytest.fail("must not compile"))
+    with pytest.raises(RuntimeError, match="requires native GNU time"):
+        compare.compare(args, core, [2], [0], argparse.ArgumentParser())
+    report = json.loads(args.output.read_text())
+    assert not report["complete"] and not report["runs"] and not called
+
+
+def test_linux_observer_mutation_prevents_complete_report(comparison_fixture, monkeypatch):
+    args, core, _, _, _ = comparison_fixture
+    monkeypatch.setattr(compare.sys, "platform", "linux")
+    run = compare.run_command
+
+    def mutate_observer(command, **kwargs):
+        result = run(command, **kwargs)
+        Path(command[0]).write_text("changed native observer")
+        return result
+
+    monkeypatch.setattr(compare, "run_command", mutate_observer)
+    with pytest.raises(RuntimeError, match="resource observer changed"):
+        compare.compare(args, core, [2], [0], argparse.ArgumentParser())
+    assert not json.loads(args.output.read_text())["complete"]
 
 
 @pytest.mark.parametrize("p99,expected", [(None, "n/a"), (0.0, "0.000")])

@@ -102,6 +102,21 @@ Compilation, process startup and two warmup batches are outside the measured
 batch timer. Per-request latency includes the children, join and JSON checks.
 Whole-process CPU/RSS counters include startup, warmups and output formatting;
 they must not be relabeled as request-only costs or tree-summed memory.
+On Linux, `compare.py` requires native GNU time at `/usr/bin/time` and verifies
+its ELF executable, version and hash before compiling. It directly launches
+GNU time and each real command in the existing bounded process group, keeping
+Python outside the measured child's resource-accounting boundary. This avoids
+the Python observer RSS floor that even `posix_spawn` plus `wait4` can inherit.
+CPU times, context switches and peak RSS are retained, with Linux KiB converted
+to bytes; `LC_NUMERIC=C` applies equally to every arm. A fresh, command-digest-bound
+JSON resource receipt is required for every successful run; absent GNU time or
+missing/invalid resources prevent a complete comparison. No observer is installed
+or substituted automatically. Receipts, observer and collector source are hashed
+and rechecked. GNU time is benchmark-harness tooling. Darwin retains its existing
+`/usr/bin/time` counters. Linux peak RSS follows kernel child-accounting
+semantics, including waited descendants if present, and is never a sum of
+simultaneous process-tree memory. This collector adds no native receipt
+admission or compiler/runtime qualification, and does not add Windows support.
 `benchmarks/protocol.py` rejects count/dimension mismatches, missing samples,
 negative/non-finite/boolean timings and invalid timer bounds before summary.
 
