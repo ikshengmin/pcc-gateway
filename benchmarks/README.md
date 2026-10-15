@@ -97,6 +97,15 @@ Reports retain QPS ranges, latency samples/percentiles, process counters and
 source/compiler identities. Only complete, validated reports support a result.
 Batch QPS is not a steady-load HTTP server benchmark or a CPU-thread count.
 
+`compare.py` reports p50, p95 and p99 in milliseconds from all measured-request
+latencies pooled across repetitions of the same arm, delay and concurrency.
+Each percentile linearly interpolates between sorted samples at index
+`(sample_count - 1) * fraction`; it is not an average of per-run percentiles.
+Warmup requests are excluded, and every run must pass exact workload/count and
+latency validation before its samples reach a summary. Existing fields and raw
+samples are retained. Rendering an older receipt without `p99_ms` shows `n/a`
+for p99, without changing or extrapolating that receipt.
+
 ## Runtime and compiler attribution
 
 [runtime_ab.py](runtime_ab.py) holds the workload constant while comparing

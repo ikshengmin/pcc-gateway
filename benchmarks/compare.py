@@ -65,6 +65,7 @@ def git_source_identity(root):
 
 
 def percentile(values, fraction):
+    """Linearly interpolate at (n - 1) * fraction, retaining sample units."""
     ordered = sorted(values)
     index = (len(ordered) - 1) * fraction
     lower = math.floor(index)
@@ -159,8 +160,8 @@ def write_markdown(path, report):
         "QPS is the median of repeated runs; percentiles pool measured requests.",
         "Process peak RSS includes startup and warmups.",
         "",
-        "| Wait (ms) | Concurrency | Implementation | Median QPS | Min–max QPS | p50 (ms) | p95 (ms) | Peak RSS (MiB) |",
-        "|---:|---:|---|---:|---:|---:|---:|---:|",
+        "| Wait (ms) | Concurrency | Implementation | Median QPS | Min–max QPS | p50 (ms) | p95 (ms) | p99 (ms) | Peak RSS (MiB) |",
+        "|---:|---:|---|---:|---:|---:|---:|---:|---:|",
     ]
     if report.get("failure"):
         failure = report["failure"]
@@ -169,11 +170,13 @@ def write_markdown(path, report):
     for row in report["summary"]:
         rss = row.get("process_peak_rss_bytes_median")
         memory = f"{rss / 1024**2:.2f}" if rss is not None else "n/a"
+        p99 = row.get("p99_ms")
+        tail_latency = f"{p99:.3f}" if p99 is not None else "n/a"
         lines.append(
             f"| {row['delay_ms']} | {row['concurrency']} | {row['implementation']} "
             f"| {row['requests_per_second_median']:.1f} "
             f"| {row['requests_per_second_min']:.1f}–{row['requests_per_second_max']:.1f} "
-            f"| {row['p50_ms']:.3f} | {row['p95_ms']:.3f} | {memory} |"
+            f"| {row['p50_ms']:.3f} | {row['p95_ms']:.3f} | {tail_latency} | {memory} |"
         )
     lines.extend(["", f"Raw samples and provenance: [{path.name}]({path.name}).", ""])
     path.with_suffix(".md").write_text("\n".join(lines))
@@ -409,6 +412,7 @@ def compare(args, core, concurrencies, delays, parser):
                     "requests_per_second_median": statistics.median(rates),
                     "requests_per_second_min": min(rates), "requests_per_second_max": max(rates),
                     "p50_ms": percentile(samples, .5), "p95_ms": percentile(samples, .95),
+                    "p99_ms": percentile(samples, .99),
                 }
                 rss = [row["process_peak_rss_bytes"] for row in rows
                        if "process_peak_rss_bytes" in row]
