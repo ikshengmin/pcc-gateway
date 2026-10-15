@@ -22,8 +22,10 @@ import tempfile
 
 try:
     from .processes import run_command
+    from .protocol import WORKLOAD_SCOPE, validate_measurement
 except ImportError:
     from processes import run_command
+    from protocol import WORKLOAD_SCOPE, validate_measurement
 import time
 
 
@@ -47,6 +49,19 @@ def git(*args, cwd=ROOT):
     result = subprocess.run(["git", *args], cwd=cwd, capture_output=True,
                             text=True, timeout=15)
     return result.stdout.strip() if result.returncode == 0 else None
+
+
+def git_source_identity(root):
+    """An export or failed Git query must never be labeled a clean commit."""
+    root = Path(root).resolve()
+    top = git("rev-parse", "--show-toplevel", cwd=root)
+    if top is None or Path(top).resolve() != root:
+        return {"commit": None, "tree": None, "dirty": None, "status": "unavailable"}
+    status = git("status", "--porcelain", "--untracked-files=all", cwd=root)
+    commit = git("rev-parse", "HEAD", cwd=root)
+    tree = git("rev-parse", "HEAD^{tree}", cwd=root)
+    return {"commit": commit, "tree": tree, "dirty": None if status is None else bool(status),
+            "status": "recorded" if None not in (commit, tree, status) else "unavailable"}
 
 
 def percentile(values, fraction):
@@ -241,6 +256,8 @@ def compare(args, core, concurrencies, delays, parser):
         cpu_model = subprocess.check_output(
             ["sysctl", "-n", "machdep.cpu.brand_string"], text=True, timeout=10
         ).strip()
+    gateway_identity = git_source_identity(ROOT)
+    core_identity = git_source_identity(core)
     report = {
         "schema": "pcc-gateway.asyncio-comparison.v1",
         "started_utc": datetime.now(timezone.utc).isoformat(),
@@ -252,22 +269,29 @@ def compare(args, core, concurrencies, delays, parser):
         "cpu_count": os.cpu_count(),
         "python_version": sys.version,
         "python_executable": sys.executable,
+        "python_executable_sha256": digest(sys.executable),
         "compiler_source": str(compiler_source),
         "compiler_source_sha256": source_tree_digest(compiler_source),
+        "compiler_source_digest_scope": "pcc/**/*.py only; not a full build-source receipt",
+        "compiler_source_git": git_source_identity(compiler_source),
         "load_average_start": os.getloadavg() if hasattr(os, "getloadavg") else None,
-        "gateway_commit": git("rev-parse", "HEAD"),
-        "gateway_dirty": bool(git("status", "--porcelain")),
-        "core_commit": git("rev-parse", "HEAD", cwd=core),
-        "core_dirty": bool(git("status", "--porcelain", cwd=core)),
+        "gateway_commit": gateway_identity["commit"],
+        "gateway_dirty": gateway_identity["dirty"],
+        "gateway_git": gateway_identity,
+        "core_commit": core_identity["commit"],
+        "core_dirty": core_identity["dirty"],
+        "core_git": core_identity,
         "core_diff_sha256": hashlib.sha256(
             (git("diff", "HEAD", "--", "pcc", cwd=core) or "").encode()
         ).hexdigest(),
         "sources": {str(path.relative_to(ROOT)): digest(path)
                     for path in sorted([
                         ROOT / "benchmark_native.py", ROOT / "benchmark_asyncio.py", Path(__file__).resolve(),
-                        ROOT / "benchmarks/processes.py",
+                        ROOT / "benchmarks/processes.py", ROOT / "benchmarks/protocol.py",
                         *ROOT.glob("pcc_gateway/**/*.py")])},
         "workload": "Two child waits, TaskScope/TaskGroup barrier, identical sorted JSON bytes; no HTTP/socket I/O",
+        "measurement_scope": WORKLOAD_SCOPE,
+        "native_source_qualification": "not established by this legacy comparison; use the strict CI native admission gate",
         "optimization_environment": {key: env.get(key) for key in (
             "PCC_GC_BACKEND", "PCC_WITH_THREADS", "PCC_RUNTIME_HIGH",
             "PCC_DISABLE_BULK_GENERATOR_FRAME_INIT", "PCC_GENERATOR_FIRST_ENTRY_INIT",
@@ -276,7 +300,8 @@ def compare(args, core, concurrencies, delays, parser):
             "PCC_DIRECT_INDEXED_KERNEL_CAPTURE", "PCC_DIRECT_INDEXED_KERNEL_EMIT",
             "PCC_DIRECT_INDEXED_NATIVE_OBJECT")},
         "warmup_batches": 2,
-        "memory_scope": "Darwin /usr/bin/time per-process peak RSS, including startup and warmups",
+        "memory_scope": ("Darwin /usr/bin/time per-process peak RSS, including startup and warmups"
+                         if sys.platform == "darwin" else "unavailable: no process resource collector on this platform"),
         "rounds": args.rounds,
         "zero_delay_requests": args.zero_delay_requests,
         "repeats": args.repeats,
@@ -361,17 +386,11 @@ def compare(args, core, concurrencies, delays, parser):
                     if ran.returncode:
                         raise RuntimeError(f"{label} failed ({ran.returncode}): {ran.stdout}\n{ran.stderr}")
                     measured = json.loads(ran.stdout)
-                    expected_count = concurrency * rounds
-                    samples = measured["latencies_ms"]
-                    if (measured["requests"] != expected_count or len(samples) != expected_count
-                            or measured["warmup_requests"] != concurrency * 2
-                            or measured["concurrency"] != concurrency or measured["delay_ms"] != delay
-                            or measured["rounds"] != rounds
-                            or not math.isfinite(measured["elapsed_ms"]) or measured["elapsed_ms"] <= 0
-                            or not all(math.isfinite(value) and value >= max(0, delay - 2)
-                                       for value in samples)
-                            or measured["elapsed_ms"] < rounds * max(0, delay - 2)):
-                        raise RuntimeError(f"invalid/incomplete {label} measurements: {measured}")
+                    try:
+                        validate_measurement(measured, concurrency=concurrency,
+                                             delay_ms=delay, rounds=rounds)
+                    except ValueError as exc:
+                        raise RuntimeError(f"invalid/incomplete {label} measurements: {exc}") from exc
                     measured.update(implementation=label, repetition=repetition)
                     measured["load_average"] = os.getloadavg() if hasattr(os, "getloadavg") else None
                     measured.update(process_metrics(ran.stderr))

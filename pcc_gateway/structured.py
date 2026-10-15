@@ -7,7 +7,7 @@ join cancels later siblings and propagates to the parent.
 ``virtual_thread.spawn`` requires a **literal, closed-world function name**
 at the call site.  The compiler proves a resumable parking boundary for the
 named target before it will emit the spawn at all
-(``pcc/py_frontend/codegen/native_virtual_thread.py::_emit_virtual_thread_spawn``
+(``pcc/frontends/python/codegen/native_virtual_thread.py::_emit_virtual_thread_spawn``
 rejects anything else with "requires a closed-world function name; dynamic
 callable targets cannot prove may_park").  A scope therefore cannot fork a
 callable handed to it as a value, the way ``scope.fork(supplier)`` does in

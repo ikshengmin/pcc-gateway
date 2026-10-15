@@ -257,7 +257,7 @@ def test_live_dns_adapter_source_uses_owned_connected_socket_abi_only() -> None:
     runtime = (
         PCC_CORE
         / "pcc"
-        / "py_runtime"
+        / "runtime"
         / "py"
         / "freestanding_platform_socket.py"
     ).read_text(encoding="utf-8")

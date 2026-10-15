@@ -2791,10 +2791,10 @@ def test_app_run_has_top_level_pcc1_gateway_closure_edge() -> None:
 
 
 def test_native_spawn_entries_have_compiler_visible_may_park_chain() -> None:
-    from pcc.py_frontend.codegen.vthread_effect_analysis import (
+    from pcc.frontends.python.codegen.vthread_effect_analysis import (
         compute_vthread_may_park_functions,
     )
-    from pcc.py_frontend.parser import parse
+    from pcc.frontends.python.parser import parse
 
     path = REPO / "pcc_gateway" / "server.py"
     module = parse(path.read_text(encoding="utf-8"), str(path))

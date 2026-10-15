@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pcc.py_frontend import pipeline_dependency_closure as closure
+from pcc.frontends.python import pipeline_dependency_closure as closure
 
 
 import pcc

@@ -16,7 +16,7 @@ import textwrap
 
 import pytest
 
-from pcc.py_frontend import pipeline
+from pcc.frontends.python import pipeline
 from pcc1_gate import find_current_pcc1
 
 
@@ -24,7 +24,7 @@ import pcc
 
 REPO = Path(__file__).resolve().parents[1]
 PCC_CORE = Path(pcc.__file__).resolve().parents[1]
-SOURCE = PCC_CORE / "pcc" / "py_runtime" / "py" / "freestanding_platform_socket.py"
+SOURCE = PCC_CORE / "pcc" / "runtime" / "py" / "freestanding_platform_socket.py"
 
 
 VIRTUAL_THREAD_TCP_ECHO_SOURCE = textwrap.dedent(
@@ -211,6 +211,7 @@ def test_gateway_socket_source_has_no_shared_receive_buffer() -> None:
     assert "flags & ~nonblocking" not in source
 
 
+@pytest.mark.integration
 def test_gateway_nonblocking_accept_read_write_and_eof(tmp_path: Path) -> None:
     obj = _platform_object(tmp_path)
     source = tmp_path / "gateway_socket_probe.c"
@@ -349,6 +350,7 @@ int main(void) {
     assert run.returncode == 0, run.stdout + run.stderr
 
 
+@pytest.mark.integration
 def test_gateway_nonblocking_connect_start_preserves_fd_mode(tmp_path: Path) -> None:
     obj = _platform_object(tmp_path)
     source = tmp_path / "gateway_connect_probe.c"
@@ -449,6 +451,7 @@ int main(void) {
     assert run.returncode == 0, run.stdout + run.stderr
 
 
+@pytest.mark.integration
 def test_gateway_nonblocking_connect_reports_exact_so_error(tmp_path: Path) -> None:
     obj = _platform_object(tmp_path)
     source = tmp_path / "gateway_connect_so_error_probe.c"

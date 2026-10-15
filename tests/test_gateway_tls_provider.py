@@ -267,25 +267,18 @@ def test_native_provider_header_and_adapter_freeze_one_capability_checked_abi() 
 
 def test_provider_digest_reader_is_pcc_owned_streaming_and_total_bounded() -> None:
     pcc_runtime = (
-        PCC_CORE / "pcc" / "py_runtime" / "py" / "py_http_runtime.py"
+        PCC_CORE / "pcc" / "runtime" / "py" / "py_hash_runtime.py"
     ).read_text(encoding="utf-8")
-    c_oracle = (PCC_CORE / "pcc" / "py_runtime" / "src" / "py_http.c").read_text(
-        encoding="utf-8"
-    )
     native_os = (
-        PCC_CORE / "pcc" / "py_frontend" / "codegen" / "native_os.py"
+        PCC_CORE / "pcc" / "frontends" / "python" / "codegen" / "native_os.py"
     ).read_text(encoding="utf-8")
     runtime_abi = (
-        PCC_CORE / "pcc" / "py_frontend" / "codegen" / "runtime_abi.py"
+        PCC_CORE / "pcc" / "frontends" / "python" / "codegen" / "runtime_abi.py"
     ).read_text(encoding="utf-8")
 
     pcc_bounded = pcc_runtime[
         pcc_runtime.index("def _sha256_file_hex_bounded(") :
-        pcc_runtime.index("def _starts_with(")
-    ]
-    c_bounded = c_oracle[
-        c_oracle.index("static PyObject *sha256_file_hex_bounded(") :
-        c_oracle.index("static int parse_http_url(")
+        pcc_runtime.index("\n\ndef ", pcc_runtime.index("def _sha256_file_hex_bounded(") + 1)
     ]
     assert "buffer = stack_alloc(32768)" in pcc_bounded
     assert "read_limit = remaining + 1" in pcc_bounded
@@ -293,9 +286,10 @@ def test_provider_digest_reader_is_pcc_owned_streaming_and_total_bounded() -> No
     assert pcc_bounded.index("if count > remaining:") < pcc_bounded.index(
         "_sha256_update(context, buffer, count)"
     )
-    assert "unsigned char buffer[32768]" in c_bounded
-    assert "read_cap = (size_t)remaining + 1U" in c_bounded
-    assert "count > (size_t)remaining" in c_bounded
+    # Hashing is now wholly owned by py_hash_runtime; the old C oracle was removed.
+    assert "pcc_platform_close(fd)" in pcc_bounded
+    assert "if count == -4:" in pcc_bounded
+    assert "total = total + count" in pcc_bounded
     assert "py_sha256_file_hex_bounded" in native_os
     bounded_lowering = native_os[
         native_os.index('if name == "_pcc_sha256_file_hex_bounded"') :
@@ -318,14 +312,14 @@ def test_provider_digest_reader_is_pcc_owned_streaming_and_total_bounded() -> No
 
 def test_provider_digest_native_result_has_exact_owned_classification() -> None:
     native_modules = (
-        PCC_CORE / "pcc" / "py_frontend" / "codegen" / "native_modules.py"
+        PCC_CORE / "pcc" / "frontends" / "python" / "codegen" / "native_modules.py"
     ).read_text(encoding="utf-8")
     native_classifier = native_modules[
         native_modules.index("    def _native_builtin_value_kind_for_expr(") :
         native_modules.index("    def _emit_native_builtin_value_call(")
     ]
     ownership = (
-        PCC_CORE / "pcc" / "py_frontend" / "codegen" / "ownership_lowering.py"
+        PCC_CORE / "pcc" / "frontends" / "python" / "codegen" / "ownership_lowering.py"
     ).read_text(encoding="utf-8")
     object_classifier = ownership[
         ownership.index("    def _expr_returns_owned_object(") :

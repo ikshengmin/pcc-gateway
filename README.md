@@ -1,5 +1,9 @@
 # pcc-gateway
 
+CI: [host contracts and explicit native admission](docs/ci.md). Host CI uses
+the declared CPython version and a pinned PCC source commit; a green host check
+does not qualify native pcc1 or establish a performance win over asyncio.
+
 An HTTP/1.1 gateway and web framework written in Python for
 [pcc](https://github.com/allstoalls/pcc), with native virtual threads,
 structured concurrency, streaming, routing, reverse proxying, DNS and a TLS

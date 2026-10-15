@@ -50,8 +50,8 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     sys.path.insert(0, str(source))
     from llvmlite import binding as llvm
-    from pcc.py_frontend import pipeline
-    from pcc.py_frontend.compiled_owned_passes import run_owned_passes
+    from pcc.frontends.python import pipeline
+    from pcc.frontends.python.compiled_owned_passes import run_owned_passes
     from pcc.backend.macho_assemble_worker import assemble_asm_path_to_encoded
     from pcc.backend.native_object import decode_packed_native_object
     from pcc.backend.macho_exec import link_executable

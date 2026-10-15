@@ -25,7 +25,7 @@ from pcc_gateway.control import (
     SIGPIPE,
     SIGTERM,
 )
-from pcc.py_frontend.pipeline_freestanding import (
+from pcc.frontends.python.pipeline_freestanding import (
     freestanding_allowed_external_symbols,
 )
 
@@ -58,7 +58,7 @@ def test_native_wrapper_names_fixed_no_libpython_control_symbols() -> None:
 
 def test_freestanding_control_has_no_executable_constant_assignments() -> None:
     source_path = (
-        PCC_CORE / "pcc" / "py_runtime" / "py" / "freestanding_gateway_control.py"
+        PCC_CORE / "pcc" / "runtime" / "py" / "freestanding_gateway_control.py"
     )
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
     assignments = [
@@ -95,7 +95,7 @@ def test_freestanding_control_has_no_executable_constant_assignments() -> None:
 
 def test_freestanding_restore_failures_keep_owner_and_pending_flags() -> None:
     source = (
-        PCC_CORE / "pcc" / "py_runtime" / "py" / "freestanding_gateway_control.py"
+        PCC_CORE / "pcc" / "runtime" / "py" / "freestanding_gateway_control.py"
     ).read_text(encoding="utf-8")
 
     assert 'define_global_i32("pcc_gateway_control_action_mask", 0)' in source
@@ -130,7 +130,7 @@ def test_freestanding_restore_failures_keep_owner_and_pending_flags() -> None:
 
 def test_partial_install_rollback_is_retryable_and_never_overwrites_saved_actions() -> None:
     source = (
-        PCC_CORE / "pcc" / "py_runtime" / "py" / "freestanding_gateway_control.py"
+        PCC_CORE / "pcc" / "runtime" / "py" / "freestanding_gateway_control.py"
     ).read_text(encoding="utf-8")
     install_start = source.index("def pcc_gateway_control_v1_install")
     poll_start = source.index("def pcc_gateway_control_v1_poll")
@@ -162,7 +162,7 @@ def test_partial_install_rollback_is_retryable_and_never_overwrites_saved_action
 
 def test_signal_mask_boundary_is_explicit_and_does_not_overclaim_thread_safety() -> None:
     source = (
-        PCC_CORE / "pcc" / "py_runtime" / "py" / "freestanding_gateway_control.py"
+        PCC_CORE / "pcc" / "runtime" / "py" / "freestanding_gateway_control.py"
     ).read_text(encoding="utf-8")
 
     assert "does not currently admit ``sigprocmask``" in source

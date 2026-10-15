@@ -3,7 +3,7 @@
 from pathlib import Path
 import runpy
 
-from pcc.native_ir.driver import optimize_ir
+from pcc.ir.optimization.driver import optimize_ir
 
 
 def test_runtime_pass_manifest_promotes_cross_block_memory():

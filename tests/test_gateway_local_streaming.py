@@ -532,10 +532,10 @@ def test_gateway_top_level_may_park_edges_use_explicit_call_boundary() -> None:
 
 
 def test_request_body_canonical_handler_methods_are_effect_visible() -> None:
-    from pcc.py_frontend.codegen.vthread_effect_analysis import (
+    from pcc.frontends.python.codegen.vthread_effect_analysis import (
         compute_vthread_may_park_methods,
     )
-    from pcc.py_frontend.parser import parse
+    from pcc.frontends.python.parser import parse
 
     path = Path(gateway_server.__file__).parent / "models.py"
     module = parse(path.read_text(encoding="utf-8"), str(path))
@@ -550,10 +550,10 @@ def test_request_body_canonical_handler_methods_are_effect_visible() -> None:
 
 
 def test_threading_wait_effect_roots_exclude_plain_lock_acquire() -> None:
-    from pcc.py_frontend.codegen.vthread_effect_analysis import (
+    from pcc.frontends.python.codegen.vthread_effect_analysis import (
         compute_vthread_may_park_functions,
     )
-    from pcc.py_frontend.parser import parse
+    from pcc.frontends.python.parser import parse
 
     module = parse(
         """import threading

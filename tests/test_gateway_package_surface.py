@@ -23,7 +23,7 @@ from pcc_gateway.tls import (
     PCC_NATIVE_TLS_ABI_VERSION,
     PCC_NATIVE_TLS_ENTRY_SYMBOL,
 )
-from pcc.py_frontend import pipeline_dependency_closure as closure
+from pcc.frontends.python import pipeline_dependency_closure as closure
 from pcc_gateway.web.app import App, middleware_next
 
 
@@ -160,13 +160,13 @@ def test_gateway_source_imports_only_compiler_owned_or_native_stdlib_seams() -> 
         "pcc_gateway.proxy",
         "pcc_gateway.routing",
         "pcc_gateway.server",
-        "pcc.py_runtime.py.py_abi_constants",
+        "pcc.runtime.py.py_abi_constants",
         "pcc.unsafe",
         "pcc.virtual_thread",
     }
     assert stdlib_dependencies <= {"json", "os", "threading"}
     for module_name in stdlib_dependencies:
-        assert (PCC_CORE / "pcc" / "py_stdlib" / (module_name + ".py")).is_file()
+        assert (PCC_CORE / "pcc" / "stdlib" / (module_name + ".py")).is_file()
 
 
 def test_external_web_application_closes_over_every_gateway_source_module(
