@@ -8,6 +8,9 @@ outcomes are distinct.
 
 from __future__ import annotations
 
+import builtins
+import hashlib
+import json
 import os
 from pathlib import Path
 import socket
@@ -16,7 +19,10 @@ import textwrap
 
 import pytest
 
-from pcc.frontends.python import pipeline
+from pcc.backend.ar import read_members
+from pcc.driver.project import TranslationUnit
+from pcc.frontends.c.evaluator.c_evaluator import CEvaluator
+from pcc.frontends.python.pipeline_targets import host_target_triple
 from pcc1_gate import find_current_pcc1
 
 
@@ -175,24 +181,61 @@ VIRTUAL_THREAD_TCP_ECHO_SOURCE = textwrap.dedent(
 ).lstrip()
 
 
-def _platform_object(tmp_path: Path) -> Path:
-    llvm_ir = tmp_path / "gateway_socket.ll"
-    pipeline.compile_python(
-        str(SOURCE),
-        str(llvm_ir),
-        emit_llvm_only=True,
-        libpython_mode="off",
-        python_library=True,
+def _platform_object(tmp_path: Path, runtime_archive: Path) -> Path:
+    """Extract the source-current owned object; never rebuild a test runtime."""
+    from tests.runtime_fixture_provenance import _verified_test_runtime_archive
+
+    archive, manifest = _verified_test_runtime_archive(
+        runtime_archive, runtime_root=SOURCE.parent.parent,
     )
+    member = "freestanding_platform_socket.o"
+    records = [row for row in manifest["members"] if row["member"] == member]
+    assert len(records) == 1, "runtime must contain exactly one socket object"
+    record = records[0]
+    assert record["source"] == "pcc/runtime/py/freestanding_platform_socket.py"
+    assert record["source_sha256"] == hashlib.sha256(SOURCE.read_bytes()).hexdigest()
+    payloads = [payload for name, payload in read_members(archive.read_bytes())
+                if name == member]
+    assert len(payloads) == 1, "runtime must contain exactly one socket object"
+    assert hashlib.sha256(payloads[0]).hexdigest() == record["object_sha256"]
     output = tmp_path / "gateway_socket.o"
-    built = subprocess.run(
-        ["clang", "-c", str(llvm_ir), "-o", str(output)],
-        capture_output=True,
-        text=True,
-        timeout=30,
+    output.write_bytes(payloads[0])
+    output.with_suffix(".o.provenance.json").write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8",
     )
-    assert built.returncode == 0, built.stdout + built.stderr
     return output
+
+
+def _owned_c_executable(
+    source: Path, obj: Path, executable: Path, runtime_archive: Path,
+) -> None:
+    """Compile the original C probe with owned preprocessing, codegen and link."""
+    original_import = builtins.__import__
+
+    def owned_import(name, *args, **kwargs):
+        if name.split(".", 1)[0] in {"llvm", "llvmlite"}:
+            raise AssertionError("socket boundary compilation must not import " + name)
+        return original_import(name, *args, **kwargs)
+
+    def no_external_tool(*args, **kwargs):
+        raise AssertionError("socket boundary compilation must not launch an external tool")
+
+    with pytest.MonkeyPatch.context() as owned:
+        owned.setenv("PCC_RUNTIME_ARCHIVE", str(runtime_archive))
+        owned.setenv("PCC_RUNTIME_BUILD", "owned")
+        owned.setenv("PCC_SELF_OBJ", "pcc")
+        owned.setenv("PCC_SELF_LINK", "pcc")
+        owned.setattr(builtins, "__import__", owned_import)
+        owned.setattr(subprocess, "Popen", no_external_tool)
+        evaluator = CEvaluator(backend="self", target_triple=host_target_triple())
+        units = evaluator.compile_translation_units(
+            [TranslationUnit(name=source.name, path=str(source),
+                             source=source.read_text(encoding="utf-8"))],
+            base_dir=str(source.parent), use_system_cpp=False,
+            jobs=1, use_compile_cache=False,
+        )
+        evaluator.emit_executable(units, str(executable), link_args=[str(obj)])
+    assert executable.is_file()
 
 
 def test_gateway_socket_source_has_no_shared_receive_buffer() -> None:
@@ -212,8 +255,10 @@ def test_gateway_socket_source_has_no_shared_receive_buffer() -> None:
 
 
 @pytest.mark.integration
-def test_gateway_nonblocking_accept_read_write_and_eof(tmp_path: Path) -> None:
-    obj = _platform_object(tmp_path)
+def test_gateway_nonblocking_accept_read_write_and_eof(
+    tmp_path: Path, pcc_py_runtime_archive: Path,
+) -> None:
+    obj = _platform_object(tmp_path, pcc_py_runtime_archive)
     source = tmp_path / "gateway_socket_probe.c"
     executable = tmp_path / "gateway_socket_probe"
     source.write_text(
@@ -337,13 +382,7 @@ int main(void) {
 ''',
         encoding="utf-8",
     )
-    built = subprocess.run(
-        ["clang", str(source), str(obj), "-o", str(executable)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert built.returncode == 0, built.stdout + built.stderr
+    _owned_c_executable(source, obj, executable, pcc_py_runtime_archive)
     run = subprocess.run(
         [str(executable)], capture_output=True, text=True, timeout=30
     )
@@ -351,8 +390,10 @@ int main(void) {
 
 
 @pytest.mark.integration
-def test_gateway_nonblocking_connect_start_preserves_fd_mode(tmp_path: Path) -> None:
-    obj = _platform_object(tmp_path)
+def test_gateway_nonblocking_connect_start_preserves_fd_mode(
+    tmp_path: Path, pcc_py_runtime_archive: Path,
+) -> None:
+    obj = _platform_object(tmp_path, pcc_py_runtime_archive)
     source = tmp_path / "gateway_connect_probe.c"
     executable = tmp_path / "gateway_connect_probe"
     source.write_text(
@@ -438,13 +479,7 @@ int main(void) {
 ''',
         encoding="utf-8",
     )
-    built = subprocess.run(
-        ["clang", str(source), str(obj), "-o", str(executable)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert built.returncode == 0, built.stdout + built.stderr
+    _owned_c_executable(source, obj, executable, pcc_py_runtime_archive)
     run = subprocess.run(
         [str(executable)], capture_output=True, text=True, timeout=30
     )
@@ -452,8 +487,10 @@ int main(void) {
 
 
 @pytest.mark.integration
-def test_gateway_nonblocking_connect_reports_exact_so_error(tmp_path: Path) -> None:
-    obj = _platform_object(tmp_path)
+def test_gateway_nonblocking_connect_reports_exact_so_error(
+    tmp_path: Path, pcc_py_runtime_archive: Path,
+) -> None:
+    obj = _platform_object(tmp_path, pcc_py_runtime_archive)
     source = tmp_path / "gateway_connect_so_error_probe.c"
     executable = tmp_path / "gateway_connect_so_error_probe"
     source.write_text(
@@ -495,13 +532,7 @@ int main(void) {
 ''',
         encoding="utf-8",
     )
-    built = subprocess.run(
-        ["clang", str(source), str(obj), "-o", str(executable)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert built.returncode == 0, built.stdout + built.stderr
+    _owned_c_executable(source, obj, executable, pcc_py_runtime_archive)
     run = subprocess.run(
         [str(executable)], capture_output=True, text=True, timeout=30
     )
