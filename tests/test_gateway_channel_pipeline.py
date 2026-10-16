@@ -1,3 +1,5 @@
+import pytest
+
 from pcc_gateway.channel import (
     INBOUND,
     OUTBOUND,
@@ -58,3 +60,50 @@ def test_stage_failure_closes_scope_and_wraps_internal_error() -> None:
         assert isinstance(context.error, ValueError)
         return
     raise AssertionError("pipeline error was swallowed")
+
+
+@pytest.mark.parametrize("direction", ["inbound", "outbound"])
+def test_failed_pipeline_releases_every_stage_once_and_preserves_primary(direction):
+    log = []
+    primary = ValueError("processing failed")
+    cleanup = RuntimeError("cleanup failed")
+    cancellation = Cancellation()
+    context = ChannelContext(1, None, cancellation)
+
+    class OwnedStage(RecordStage):
+        def inbound(self, context, message):
+            if self.name == "b":
+                raise primary
+            return super().inbound(context, message)
+
+        def outbound(self, context, message):
+            if self.name == "b":
+                raise primary
+            return super().outbound(context, message)
+
+        def close(self, context):
+            super().close(context)
+            if self.name == "c":
+                pipeline.close(context)
+                raise cleanup
+
+    pipeline = ChannelPipeline(tuple(OwnedStage(name, log) for name in ("a", "b", "c")))
+    with pytest.raises(PipelineError) as error:
+        getattr(pipeline, direction)(context, b"x")
+    assert error.value.__cause__ is primary
+    assert context.error is primary
+    assert context.closed and cancellation.cancelled
+    assert [item for item in log if item.endswith(":close")] == ["c:close", "b:close", "a:close"]
+    pipeline.close(context)
+    assert [item for item in log if item.endswith(":close")] == ["c:close", "b:close", "a:close"]
+
+
+def test_explicit_context_close_does_not_skip_stage_resource_retirement():
+    log = []
+    context = ChannelContext(1, None, Cancellation())
+    pipeline = ChannelPipeline((RecordStage("a", log), RecordStage("b", log)))
+    context.close(ValueError("connection disconnected"))
+    pipeline.close(context)
+    pipeline.close(context)
+    assert log == ["b:close", "a:close"]
+    assert str(context.error) == "connection disconnected"

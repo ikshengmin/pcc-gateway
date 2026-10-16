@@ -345,12 +345,12 @@ def gateway_product_tls_assets(tmp_path_factory) -> TlsAssets:
 
 
 @pytest.fixture(scope="session")
-def gateway_product_runtime_archive(threaded_pcc_py_runtime_archive) -> Path:
+def gateway_product_runtime_archive(threaded_pcc_py_runtime_archive: Path) -> Path:
     archive = threaded_pcc_py_runtime_archive
     if not archive.is_file():
         _gate_fail(f"threaded pcc-Python runtime archive is missing: {archive}")
     manifest = verify_runtime_archive_manifest(
-        archive, runtime_root=PCC_CORE / "pcc" / "runtime"
+        archive, runtime_root=PCC_CORE / "pcc" / "runtime",
     )
     records = manifest["members"]
     assert manifest["policy"] == PRODUCTION_POLICY

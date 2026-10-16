@@ -25,6 +25,7 @@ class ChannelContext:
         self.cancellation = cancellation
         self.attributes = {}
         self.closed = False
+        self.stages_closed = False
         self.error = None
 
     def close(self, error=None) -> None:
@@ -76,6 +77,7 @@ class ChannelPipeline:
                         break
         except Exception as error:
             context.close(error)
+            self.close(context)
             raise PipelineError("inbound stage failed") from error
         return current
 
@@ -94,12 +96,18 @@ class ChannelPipeline:
                 index -= 1
         except Exception as error:
             context.close(error)
+            self.close(context)
             raise PipelineError("outbound stage failed") from error
         return current
 
     def close(self, context: ChannelContext) -> None:
-        if context.closed:
+        if context.stages_closed:
             return
+        # A protocol failure or explicit context close already stops traffic,
+        # but stage resources still belong to this pipeline. Take their owner
+        # before callbacks so reentrant close cannot retire them twice.
+        context.stages_closed = True
+        already_closed = context.closed
         context.closed = True
         first_error = None
         index = len(self.stages) - 1
@@ -110,9 +118,9 @@ class ChannelPipeline:
                 if first_error is None:
                     first_error = error
             index -= 1
-        if context.cancellation is not None:
+        if not already_closed and context.cancellation is not None:
             context.cancellation.cancel("channel closed")
-        if first_error is not None:
+        if first_error is not None and context.error is None:
             context.error = first_error
 
 

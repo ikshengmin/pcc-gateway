@@ -15,6 +15,7 @@ from .buffer import ChannelBuffer
 from .http1 import (
     Http1Error,
     Http1ResponseEncoder,
+    _bounded_content_length,
     _contains_bad_value_byte,
     _find_crlf,
     _find_double_crlf,
@@ -141,8 +142,8 @@ class Http1UpstreamCodec:
             for character in lengths[0]:
                 if character < "0" or character > "9":
                     raise ProxyProtocolError("bad-length", "invalid upstream length")
-            content_length = int(lengths[0])
-            if content_length > self.max_body_bytes:
+            content_length = _bounded_content_length(lengths[0], self.max_body_bytes)
+            if content_length < 0:
                 raise ProxyProtocolError("body-too-large", "upstream body limit exceeded")
 
         chunked = False

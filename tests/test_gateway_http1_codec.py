@@ -410,3 +410,32 @@ main()
     )
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert "PCC1_HTTP1_CODEC_OK" in ran.stdout
+
+
+@pytest.mark.parametrize("prefix", [b"", b"0" * 5000], ids=["plain", "leading-zeros"])
+def test_content_length_uses_numeric_limit_without_host_integer_conversion(prefix):
+    codec = Http1ServerCodec(max_body_bytes=9)
+    events = codec.feed(
+        b"POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: "
+        + prefix + b"9\r\n\r\n123456789"
+    )
+    assert events[0].content_length == 9
+    assert events[1].data == b"123456789"
+    assert isinstance(events[2], RequestEnd)
+    events[1].release()
+
+
+@pytest.mark.parametrize("length", [b"10", b"9" * 5000, b"0" * 5000 + b"10"], ids=["limit-plus-one", "huge", "leading-zeros"])
+def test_oversized_decimal_length_stays_inside_http_error_boundary(length, monkeypatch):
+    created = _track_body_chunks(monkeypatch)
+    codec = Http1ServerCodec(max_body_bytes=9)
+    with pytest.raises(Http1Error) as error:
+        codec.feed(
+            b"POST /first HTTP/1.1\r\nHost: example.test\r\nContent-Length: 1\r\n\r\nx"
+            b"POST /second HTTP/1.1\r\nHost: example.test\r\nContent-Length: "
+            + length + b"\r\n\r\n"
+        )
+    assert error.value.status == 413
+    assert error.value.code == "body-too-large"
+    assert len(created) == 1
+    assert created[0].released and created[0].release_calls == 1

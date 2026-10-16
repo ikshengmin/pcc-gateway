@@ -339,3 +339,72 @@ def test_unrouted_path_is_a_framework_404(scheduler) -> None:
     app = module.build_app()
     response = app.dispatch(module.Request("GET", "/nope"))
     assert response.status == 404
+
+
+@pytest.mark.parametrize("failed_join", [False, True])
+def test_scope_cancels_siblings_before_waiting_for_interdependent_cleanup(monkeypatch, failed_join):
+    """Execute child cleanup on host threads; this is not a native scheduler gate."""
+    import threading
+
+    peer_cleanup_done = threading.Event()
+    join_timeouts = []
+
+    class Child:
+        def __init__(self, waits_for_peer):
+            self.cancelled = threading.Event()
+            self.started = threading.Event()
+            self.done = threading.Event()
+            self.waits_for_peer = waits_for_peer
+            self.thread = threading.Thread(target=self.run)
+            self.thread.start()
+            assert self.started.wait(5)
+
+        def run(self):
+            self.started.set()
+            self.cancelled.wait()
+            if self.waits_for_peer:
+                peer_cleanup_done.wait()
+            else:
+                peer_cleanup_done.set()
+            self.done.set()
+
+    primary = ValueError("first child failed")
+    failed = object()
+    first = Child(True)
+    second = Child(False)
+
+    def cancel(child):
+        child.cancelled.set()
+        return True
+
+    def join(child):
+        if child is failed:
+            raise primary
+        if not child.done.wait(1):
+            join_timeouts.append(child)
+            raise RuntimeError("cleanup waited for sibling cancellation")
+        child.thread.join(1)
+
+    monkeypatch.setattr(virtual_thread, "cancel", cancel)
+    monkeypatch.setattr(virtual_thread, "join", join)
+    scope = TaskScope("interdependent-cleanup")
+    if failed_join:
+        scope.fork(failed)
+    scope.fork(first)
+    scope.fork(second)
+    try:
+        if failed_join:
+            with pytest.raises(ValueError) as error:
+                scope.join()
+            assert error.value is primary
+        else:
+            scope.close("parent abandoned request")
+        assert join_timeouts == [], "scope drained a child before cancelling its sibling"
+        assert first.done.is_set() and second.done.is_set()
+    finally:
+        first.cancelled.set()
+        second.cancelled.set()
+        peer_cleanup_done.set()
+        first.thread.join(5)
+        second.thread.join(5)
+    assert not first.thread.is_alive() and not second.thread.is_alive()

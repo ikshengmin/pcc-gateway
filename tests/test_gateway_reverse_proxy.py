@@ -746,3 +746,21 @@ def test_current_pcc1_self_no_libpython_streaming_reverse_proxy(
     )
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert ran.stdout.strip() == "PCC1_GATEWAY_PROXY_CORE_OK"
+
+
+@pytest.mark.parametrize("prefix", [b"", b"0" * 5000], ids=["plain", "leading-zeros"])
+def test_upstream_length_accepts_bounded_value_with_arbitrary_leading_zeros(prefix):
+    codec = Http1UpstreamCodec("GET", max_body_bytes=9)
+    events = codec.feed(b"HTTP/1.1 200 OK\r\nContent-Length: " + prefix + b"9\r\n\r\n123456789")
+    assert events[0].content_length == 9
+    assert events[1].data == b"123456789"
+    assert isinstance(events[2], UpstreamResponseEnd)
+    assert codec.complete
+
+
+@pytest.mark.parametrize("length", [b"10", b"9" * 5000, b"0" * 5000 + b"10"], ids=["limit-plus-one", "huge", "leading-zeros"])
+def test_upstream_oversized_decimal_length_is_a_named_protocol_error(length):
+    codec = Http1UpstreamCodec("GET", max_body_bytes=9)
+    with pytest.raises(ProxyProtocolError) as error:
+        codec.feed(b"HTTP/1.1 200 OK\r\nContent-Length: " + length + b"\r\n\r\n")
+    assert error.value.code == "body-too-large"

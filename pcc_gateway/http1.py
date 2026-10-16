@@ -294,6 +294,23 @@ def _parse_headers(lines: list[bytes], max_count: int):
     return headers, names
 
 
+def _bounded_content_length(decimal: str, limit: int) -> int:
+    """Convert validated decimal digits, returning -1 above the body limit.
+
+    Check before multiplying so the protocol does not depend on host integer
+    conversion limits or overflow native integers. Leading zeros are valid.
+    """
+    value = 0
+    quotient = limit // 10
+    remainder = limit % 10
+    for character in decimal:
+        digit = ord(character) - 48
+        if value > quotient or (value == quotient and digit > remainder):
+            return -1
+        value = value * 10 + digit
+    return value
+
+
 class Http1ServerCodec:
     """Incremental request decoder with explicit framing and memory bounds."""
 
@@ -370,8 +387,8 @@ class Http1ServerCodec:
             for char in raw_length:
                 if char < "0" or char > "9":
                     raise Http1Error(400, "bad-content-length", "non-decimal Content-Length")
-            content_length = int(raw_length)
-            if content_length > self.max_body_bytes:
+            content_length = _bounded_content_length(raw_length, self.max_body_bytes)
+            if content_length < 0:
                 raise Http1Error(413, "body-too-large", "request body limit exceeded")
 
         chunked = False

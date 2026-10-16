@@ -159,11 +159,20 @@ class TaskScope:
         """Cancel and drain children from ``start`` to the end of the scope."""
         index = start
         while index < len(self.children):
-            self._retire_child(self.children[index])
+            # Cleanup may wait for another child's cancellation/finalizer.
+            # Deliver cancellation to every sibling before any join parks.
+            virtual_thread.cancel(self.children[index])
+            index += 1
+        index = start
+        while index < len(self.children):
+            self._drain_child(self.children[index])
             index += 1
 
     def _retire_child(self, child) -> None:
         virtual_thread.cancel(child)
+        self._drain_child(child)
+
+    def _drain_child(self, child) -> None:
         try:
             virtual_thread.join(child)
         except Exception:
