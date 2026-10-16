@@ -34,6 +34,8 @@ def comparison_fixture(tmp_path, monkeypatch):
     monkeypatch.setattr(compare, "__file__", str(root / "benchmarks/compare.py"))
     monkeypatch.setattr(compare, "git", lambda *args, **kwargs: None)
     monkeypatch.setattr(compare.platform, "processor", lambda: "synthetic CPU")
+    # platform.platform() runs `file` through subprocess.check_output on macOS.
+    monkeypatch.setattr(compare.platform, "platform", lambda *args, **kwargs: "synthetic platform")
     monkeypatch.setattr(compare.subprocess, "check_output", lambda *args, **kwargs: "synthetic CPU\n")
     timer = root / "synthetic-time"
     timer.write_bytes(b"synthetic timer fixture, never executed")
