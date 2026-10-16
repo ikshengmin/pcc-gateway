@@ -1,0 +1,88 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/host-gates.samples",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/host-gates.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/host-gates.stdout"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python",
+    "-m",
+    "pytest",
+    "-x",
+    "-n0",
+    "-vv",
+    "--tb=short",
+    "tests/test_benchmark_layers.py::test_layer_payload_and_declared_wait_shape",
+    "tests/test_benchmark_layers.py::test_layer_failure_cancels_and_drains_the_sibling",
+    "tests/test_gateway_structured_concurrency.py::test_root_driver_waits_when_a_scheduler_step_is_idle",
+    "tests/test_gateway_structured_concurrency.py::test_scope_forks_every_child_before_the_barrier_joins_any",
+    "tests/test_gateway_structured_concurrency.py::test_first_failure_cancels_later_siblings_and_propagates",
+    "tests/test_gateway_structured_concurrency.py::test_failure_is_reported_in_fork_order_not_completion_order",
+    "tests/test_gateway_structured_concurrency.py::test_rejoining_a_failed_scope_reraises_the_same_failure",
+    "tests/test_gateway_structured_concurrency.py::test_close_drains_children_when_the_scope_body_never_joined",
+    "tests/test_gateway_structured_concurrency.py::test_close_is_idempotent_and_a_noop_after_a_successful_join",
+    "tests/test_gateway_http1_codec.py::test_fragmented_keep_alive_requests_emit_typed_events",
+    "tests/test_gateway_http1_codec.py::test_ambiguous_and_malformed_framing_fails_closed",
+    "tests/test_gateway_http1_codec.py::test_feed_error_releases_undelivered_body_chunk_owner_exactly_once",
+    "tests/test_gateway_http1_codec.py::test_successful_feed_transfers_body_chunk_owner_without_releasing",
+    "tests/test_gateway_buffers.py::test_channel_reports_exact_high_and_low_transitions",
+    "tests/test_gateway_buffers.py::test_close_releases_all_queued_views_once",
+    "tests/test_gateway_lifecycle.py::test_drain_stops_admission_before_active_scope_completion",
+    "tests/test_gateway_lifecycle.py::test_generation_resource_callbacks_can_reenter_lifecycle_without_deadlock",
+    "tests/test_gateway_local_streaming.py::test_pending_child_cleanup_wakes_cancels_joins_and_releases_once",
+    "tests/test_gateway_local_streaming.py::test_stalled_high_water_body_wait_observes_request_deadline",
+    "tests/test_gateway_local_streaming.py::test_stream_completion_takes_owner_before_reentrant_close",
+    "tests/test_gateway_server.py::test_connection_transport_parks_read_and_write_without_blocking_carrier",
+    "tests/test_gateway_server.py::test_proxy_attempt_cleanup_releases_every_owner_after_callback_failures",
+    "tests/test_gateway_server.py::test_connection_open_hook_failure_still_closes_every_connection_owner",
+    "tests/test_gateway_server.py::test_tls_close_notify_provider_failure_still_closes_all_owners",
+    "tests/test_gateway_server.py::test_shutdown_retires_accept_owner_before_stopping_carriers",
+    "tests/test_gateway_server.py::test_shutdown_waits_past_resource_release_for_task_terminal_outcome"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T04:25:54.570592+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc-gateway",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 1.274365362998651,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_NO_AUTO_PCC1": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 1,
+  "largest_process_observed": {
+    "command": "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest -x -n0 -vv --tb=short tests/test_benchmark_layers.py::test_layer_payload_and_declared_wait_shape tests/test_benchmark_layers.py::test_layer_failure_cancels_and_drains_the_sibling tests/test_gateway_structured_concurrency.py::test_root_driver_waits_when_a_scheduler_step_is_idle tests/test_gateway_structured_concurrency.py::test_scope_forks_every_child_before_the_barrier_joins_any tests/test_gateway_structured_concurrency.py::test_first_failure_cancels_later_siblings_and_propagates tests/test_gateway_structured_concurrency.py::test_failure_is_reported_in_fork_order_not_completion_order tests/test_gateway_structured_concurrency.py::test_rejoining_a_failed_scope_reraises_the_same_failure tests/test_gateway_structured_concurrency.py::test_close_drains_children_when_the_scope_body_never_joined tests/test_gateway_structured_concurrency.py::test_close_is_idempotent_and_a_noop_after_a_successful_join tests/test_gateway_http1_codec.py::test_fragmented_keep_alive_requests_emit_typed_events tests/test_gateway_http1_codec.py::test_ambiguous_and_malformed_framing_fails_closed tests/test_gateway_http1_codec.py::test_feed_error_releases_undelivered_body_chunk_owner_exactly_once tests/test_gateway_http1_codec.py::test_successful_feed_transfers_body_chunk_owner_without_releasing tests/test_gateway_buffers.py::test_channel_reports_exact_high_and_low_transitions tests/test_gateway_buffers.py::test_close_releases_all_queued_views_once tests/test_gateway_lifecycle.py::test_drain_stops_admission_before_active_scope_completion tests/test_gateway_lifecycle.py::test_generation_resource_callbacks_can_reenter_lifecycle_without_deadlock tests/test_gateway_local_streaming.py::test_pending_child_cleanup_wakes_cancels_joins_and_releases_once tests/test_gateway_local_streaming.py::test_stalled_high_water_body_wait_observes_request_deadline tests/test_gateway_local_streaming.py::test_stream_completion_takes_owner_before_reentrant_close tests/test_gateway_server.py::test_connection_transport_parks_read_and_write_without_blocking_carrier tests/test_gateway_server.py::test_proxy_attempt_cleanup_releases_every_owner_after_callback_failures tests/test_gateway_server.py::test_connection_open_hook_failure_still_closes_every_connection_owner tests/test_gateway_server.py::test_tls_close_notify_provider_failure_still_closes_all_owners tests/test_gateway_server.py::test_shutdown_retires_accept_owner_before_stopping_carriers tests/test_gateway_server.py::test_shutdown_waits_past_resource_release_for_task_terminal_outcome",
+    "elapsed_s": 1.017821,
+    "manifest_paths": [],
+    "pid": 6,
+    "ppid": 5,
+    "rss_bytes": 82198528
+  },
+  "max_tree_rss_bytes": 805306368,
+  "peak_process_count": 1,
+  "peak_tree_rss_bytes": 82198528,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": 0,
+  "sample_count": 6,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T04:25:53.296224+00:00",
+  "status": "COMPLETE",
+  "terminal_processes": [
+    {
+      "command": "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest -x -n0 -vv --tb=short tests/test_benchmark_layers.py::test_layer_payload_and_declared_wait_shape tests/test_benchmark_layers.py::test_layer_failure_cancels_and_drains_the_sibling tests/test_gateway_structured_concurrency.py::test_root_driver_waits_when_a_scheduler_step_is_idle tests/test_gateway_structured_concurrency.py::test_scope_forks_every_child_before_the_barrier_joins_any tests/test_gateway_structured_concurrency.py::test_first_failure_cancels_later_siblings_and_propagates tests/test_gateway_structured_concurrency.py::test_failure_is_reported_in_fork_order_not_completion_order tests/test_gateway_structured_concurrency.py::test_rejoining_a_failed_scope_reraises_the_same_failure tests/test_gateway_structured_concurrency.py::test_close_drains_children_when_the_scope_body_never_joined tests/test_gateway_structured_concurrency.py::test_close_is_idempotent_and_a_noop_after_a_successful_join tests/test_gateway_http1_codec.py::test_fragmented_keep_alive_requests_emit_typed_events tests/test_gateway_http1_codec.py::test_ambiguous_and_malformed_framing_fails_closed tests/test_gateway_http1_codec.py::test_feed_error_releases_undelivered_body_chunk_owner_exactly_once tests/test_gateway_http1_codec.py::test_successful_feed_transfers_body_chunk_owner_without_releasing tests/test_gateway_buffers.py::test_channel_reports_exact_high_and_low_transitions tests/test_gateway_buffers.py::test_close_releases_all_queued_views_once tests/test_gateway_lifecycle.py::test_drain_stops_admission_before_active_scope_completion tests/test_gateway_lifecycle.py::test_generation_resource_callbacks_can_reenter_lifecycle_without_deadlock tests/test_gateway_local_streaming.py::test_pending_child_cleanup_wakes_cancels_joins_and_releases_once tests/test_gateway_local_streaming.py::test_stalled_high_water_body_wait_observes_request_deadline tests/test_gateway_local_streaming.py::test_stream_completion_takes_owner_before_reentrant_close tests/test_gateway_server.py::test_connection_transport_parks_read_and_write_without_blocking_carrier tests/test_gateway_server.py::test_proxy_attempt_cleanup_releases_every_owner_after_callback_failures tests/test_gateway_server.py::test_connection_open_hook_failure_still_closes_every_connection_owner tests/test_gateway_server.py::test_tls_close_notify_provider_failure_still_closes_all_owners tests/test_gateway_server.py::test_shutdown_retires_accept_owner_before_stopping_carriers tests/test_gateway_server.py::test_shutdown_waits_past_resource_release_for_task_terminal_outcome",
+      "manifest_paths": [],
+      "pid": 6,
+      "ppid": 5,
+      "rss_bytes": 0
+    }
+  ],
+  "timeout_s": 120.0
+}

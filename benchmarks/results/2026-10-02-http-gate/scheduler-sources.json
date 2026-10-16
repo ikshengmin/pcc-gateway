@@ -1,0 +1,14 @@
+{
+  "files": {
+    "pcc/runtime/py/freestanding_io_waitset.py": "1062059eb2882a59a0dd8c61afd88134525c056f897b368c447d1b186b6bfd03",
+    "pcc/runtime/py/freestanding_thread_kernel_pthread.py": "d3f9d9c193bf9b79b0c4489c2f437d1695ba7b0579d1e46c8214bed3770302ae",
+    "pcc/runtime/py/py_threading.py": "f0d2b946fd79b99446fdb93409c7413aeb31991b82ce57e890f87c6d05bf4a3b",
+    "pcc/runtime/py/py_virtual_thread_runtime.py": "497153b5727f0b5ec914f4912f5e0ed3a4326153a6b28c15146b19edd8fbf058",
+    "tests/python/gc_production_contract/test_vthread_io_waitset_runtime.py": "df60a1499bd5cb0990ff2838792166f5c8ea5d4b6110155cbcd04d4796e8106a",
+    "tests/python/test_freestanding_io_waitset.py": "3000eb67c830f85c2457b9412050f0cb30201d6293cacf812ab17d97cde1f68d",
+    "tests/python/test_virtual_thread_pcc_py_carriers.py": "aedcf6429299a01c3d32851b6f94017a139074e452304b0299eed1c7b5d05e1d",
+    "tests/python/test_vthread_timer_heap_scheduler.py": "8de2c360f08573dac2bd9c8b0f5a29ea76b68381631e5ed014e090584fb11cf9"
+  },
+  "scope": "read-only event-driven persistent-carrier source proposal; no execution or core edits",
+  "source_root": "/workspace/scratch/ce254c0a0910/pcc"
+}

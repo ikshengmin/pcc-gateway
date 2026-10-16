@@ -1,0 +1,6 @@
+mem2reg,sroa changed=False seconds=0.1315278850015602
+instsimplify changed=True seconds=0.0704146509997372
+inline-defined changed=True seconds=0.21324118899792666
+instsimplify changed=False seconds=0.028359074996842537
+instcombine changed=True seconds=0.05450108399963938
+dce changed=True seconds=0.07205350699950941

@@ -1,0 +1,44 @@
+{
+  "baseline_commit": "e7cb847e58de182ffa1580e42e56d6e607e1f8ce",
+  "not_run": [
+    "current native pcc/pcc1 handler compilation",
+    "native throughput comparison",
+    "native GC0-4",
+    "live HTTP",
+    "real TLS/HTTPS",
+    "macOS execution"
+  ],
+  "notes": [
+    "No compiler/runtime source edits",
+    "No gateway behavior edits; selected host gates did not demonstrate a logic bug",
+    "Child process cleanup verified; no task-owned test or observer processes remain"
+  ],
+  "schema": "pcc-gateway.linux-observer-verification.v1",
+  "source_sha256": {
+    "benchmarks/README.md": "36eb0e442845b2d11d17e527230230608713ce096ecaa9f4bdb07cff916ab365",
+    "benchmarks/compare.py": "4e9b1dee4defabe9a9c34a74cce50abee816e887feafb483c4dac3bbf695ba95",
+    "benchmarks/observation.py": "9deccb2bda05d500f18f9542dde7e1d5f5652f454e117256ab7a7cab8cf5c1ad",
+    "benchmarks/process_observer.c": "6157596a822364d6e961afabdfd237d274823817f4bdf42e8611749df87957a2",
+    "tests/test_benchmark_compile_receipts.py": "99cc54da1bd73623769a8e6598a558d03aa6ff58733df9a346b620feb8ef032c",
+    "tests/test_benchmark_observation.py": "783e23f5b2ef8c5bfab7c76a56d83ca7fb07741337b9689904df420485f397a4"
+  },
+  "status": "PASS_HOST_OBSERVER_GATES_ONLY",
+  "tests": {
+    "final-tests": {
+      "elapsed_seconds": 1.7831584230007138,
+      "log": "benchmarks/results/2026-10-02-linux-observer/final-tests.stdout",
+      "passed": 33,
+      "peak_tree_rss_bytes": 72015872,
+      "returncode": 0,
+      "watchdog_status": "COMPLETE"
+    },
+    "host-gates": {
+      "elapsed_seconds": 1.274365362998651,
+      "log": "benchmarks/results/2026-10-02-linux-observer/host-gates.stdout",
+      "passed": 31,
+      "peak_tree_rss_bytes": 82198528,
+      "returncode": 0,
+      "watchdog_status": "COMPLETE"
+    }
+  }
+}

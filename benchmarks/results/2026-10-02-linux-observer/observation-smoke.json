@@ -1,0 +1,151 @@
+{
+  "cpu_scope": "wait4 exact workload child user/system CPU, including startup, warmups, output formatting and waited descendants; excludes the observation supervisor",
+  "macos_status": "Unit normalization covered with mocked platform; no macOS execution in this Linux checkpoint",
+  "memory_scope": "wait4 exact workload child ru_maxrss (Linux KiB converted to bytes; macOS bytes), including pre-exec, startup, warmups and retained latency samples; includes waited descendants per OS semantics, not synchronized process-tree RSS; excludes the observation supervisor",
+  "native_comparison_status": "NOT_RUN: awaiting current compiler/runtime qualification and coordinator release",
+  "observer": {
+    "archived_log": "benchmarks/results/2026-10-02-linux-observer/observer-build.log",
+    "build_timeout_seconds": 30,
+    "command": [
+      "/usr/bin/x86_64-linux-gnu-gcc-14",
+      "-std=c11",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/process_observer.c",
+      "-o",
+      "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/process-observer"
+    ],
+    "compiler": "/usr/bin/x86_64-linux-gnu-gcc-14",
+    "compiler_sha256": "a23ecab8ff08f09ad8c80602c2c5df7f49e09c25905cb8975902e101bf72635f",
+    "instructions": "unavailable: wait4 does not supply hardware instruction/cycle counts",
+    "log": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/process-observer-build.log",
+    "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/process-observer",
+    "scope": "External observation tooling only; never a native artifact producer",
+    "sha256": "045f5649d19787741e8d542657eb5c2559dac0bdcdf6854a3dbb05d161d50580",
+    "source": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/process_observer.c",
+    "source_sha256": "6157596a822364d6e961afabdfd237d274823817f4bdf42e8611749df87957a2"
+  },
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "python": "3.15.0rc1 (main, Aug 25 2026, 14:02:32) [Clang 22.1.3 ]",
+  "runs": [
+    {
+      "command": [
+        "/bin/true"
+      ],
+      "label": "trivial",
+      "metrics": {
+        "process_cpu_seconds": 0.000572,
+        "process_involuntary_context_switches": 0,
+        "process_major_page_faults": 0,
+        "process_minor_page_faults": 188,
+        "process_peak_rss_bytes": 393216,
+        "process_real_seconds": 0.000640304,
+        "process_sys_seconds": 0.0,
+        "process_user_seconds": 0.000572,
+        "process_voluntary_context_switches": 1
+      },
+      "raw": {
+        "receipt": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/trivial.process.json",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/trivial.process.json",
+          "sha256": "8fc1c25c952b320dd4efa646feaf710ce4d156637db0df78594b7ae68375f5e9"
+        },
+        "stderr": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/trivial.stderr",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/trivial.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/trivial.stdout",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/trivial.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "command": [
+        "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python",
+        "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_asyncio.py",
+        "2",
+        "10",
+        "2"
+      ],
+      "label": "asyncio-taskgroup",
+      "metrics": {
+        "process_cpu_seconds": 0.056242,
+        "process_involuntary_context_switches": 21,
+        "process_major_page_faults": 0,
+        "process_minor_page_faults": 3288,
+        "process_peak_rss_bytes": 21557248,
+        "process_real_seconds": 0.09771723,
+        "process_sys_seconds": 0.008622,
+        "process_user_seconds": 0.04762,
+        "process_voluntary_context_switches": 5
+      },
+      "raw": {
+        "receipt": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/asyncio-taskgroup.process.json",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/asyncio-taskgroup.process.json",
+          "sha256": "ea261386f4c6c15e8d9ddaaca9e87a7b656aa22f574c0442c4845ebe14b59069"
+        },
+        "stderr": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/asyncio-taskgroup.stderr",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/asyncio-taskgroup.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/asyncio-taskgroup.stdout",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/asyncio-taskgroup.stdout",
+          "sha256": "28baf8acd29b5195b866766bf88afcd5d8886777aff8be4d26dd3a315e4be9ec"
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "command": [
+        "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python",
+        "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_asyncio_gather.py",
+        "2",
+        "10",
+        "2"
+      ],
+      "label": "asyncio-gather",
+      "metrics": {
+        "process_cpu_seconds": 0.061147,
+        "process_involuntary_context_switches": 255,
+        "process_major_page_faults": 0,
+        "process_minor_page_faults": 3314,
+        "process_peak_rss_bytes": 21647360,
+        "process_real_seconds": 0.105140177,
+        "process_sys_seconds": 0.00723,
+        "process_user_seconds": 0.053917,
+        "process_voluntary_context_switches": 5
+      },
+      "raw": {
+        "receipt": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/asyncio-gather.process.json",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/asyncio-gather.process.json",
+          "sha256": "9213018b69ebe2bc43884c7173877a6a19c7b831f5f76aed0ea5616f27244f7c"
+        },
+        "stderr": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/asyncio-gather.stderr",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/asyncio-gather.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "archived_path": "benchmarks/results/2026-10-02-linux-observer/asyncio-gather.stdout",
+          "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/asyncio-gather.stdout",
+          "sha256": "f0fda7c3b44b2693cb9c4754bef871bdcd611cfee3f830b454d9dd65670d6ea1"
+        }
+      },
+      "status": "PASS"
+    }
+  ],
+  "schema": "pcc-gateway.linux-observer-check.v1",
+  "scope": "Observation tooling and host correctness only; no native pcc application compilation or performance qualification",
+  "started_utc": "2026-10-02T04:29:26.967479+00:00",
+  "status": "PASS"
+}

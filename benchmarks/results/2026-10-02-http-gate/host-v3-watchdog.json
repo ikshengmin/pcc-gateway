@@ -1,0 +1,67 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/host-v3-samples.tsv",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/host-v3.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/host-v3.stdout"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_benchmark_http.py",
+    "-o",
+    "addopts=",
+    "-x",
+    "-n0",
+    "-vv",
+    "--tb=short"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T08:15:51.999850+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc-gateway",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 1.529782918998535,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_NO_AUTO_PCC1": "1",
+    "PCC_TEST_NO_NATIVE_PROVISIONING": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 1,
+  "largest_process_observed": {
+    "command": "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short",
+    "elapsed_s": 1.274446,
+    "manifest_paths": [],
+    "pid": 6,
+    "ppid": 5,
+    "rss_bytes": 67452928
+  },
+  "max_tree_rss_bytes": 1073741824,
+  "peak_process_count": 1,
+  "peak_tree_rss_bytes": 67452928,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": 0,
+  "sample_count": 7,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T08:15:50.470063+00:00",
+  "status": "COMPLETE",
+  "terminal_processes": [
+    {
+      "command": "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short",
+      "manifest_paths": [],
+      "pid": 6,
+      "ppid": 5,
+      "rss_bytes": 0
+    }
+  ],
+  "timeout_s": 120.0
+}

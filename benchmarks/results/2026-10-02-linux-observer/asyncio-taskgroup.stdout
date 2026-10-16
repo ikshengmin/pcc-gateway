@@ -1,0 +1,1 @@
+{"concurrency": 2, "delay_ms": 10, "elapsed_ms": 20.477088999541593, "latencies_ms": [10.203286999967531, 10.208695000983425, 10.181763998843962, 10.18247399952088], "requests": 4, "rounds": 2, "warmup_requests": 4}

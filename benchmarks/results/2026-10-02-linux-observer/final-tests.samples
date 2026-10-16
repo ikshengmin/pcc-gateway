@@ -1,0 +1,9 @@
+elapsed_s	tree_rss_bytes	process_count	largest_pid	largest_rss_bytes	largest_command
+0.008809	6402048	1	6	6402048	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+0.262204	45301760	1	6	45301760	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+0.5158	59887616	3	6	45301760	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+0.768325	72015872	4	6	45305856	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+1.022411	72015872	4	6	45305856	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+1.275392	71450624	3	6	45309952	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+1.528169	59551744	2	6	45309952	/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short
+1.781052	0	1	0	0	

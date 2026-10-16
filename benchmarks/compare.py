@@ -93,8 +93,8 @@ def save(path, report):
             temporary.unlink(missing_ok=True)
 
 
-def compile_arm(label, compiler, source, output, log, *, env, report, report_path):
-    command = [compiler, "--backend", "self", "--python-libpython", "off",
+def compile_arm(label, compiler, source, output, log, *, env, report, report_path, compiler_args=()):
+    command = [compiler, *compiler_args, "--backend", "self", "--python-libpython", "off",
                "--ir-scaffold", "on", str(source), "-o", str(output)]
     row = {
         "path": compiler, "sha256": digest(compiler), "command": command,
@@ -117,6 +117,14 @@ def compile_arm(label, compiler, source, output, log, *, env, report, report_pat
             if "libpython" in linkage.lower() or "libllvm" in linkage.lower():
                 raise RuntimeError(label + " unexpectedly links an external compiler/Python runtime")
             row["dynamic_dependencies"] = linkage.splitlines()[1:]
+        elif sys.platform == "linux":
+            # Inspect ELF metadata without executing the artifact via ldd.
+            linkage = subprocess.check_output(["readelf", "-d", str(output)], text=True, timeout=10)
+            dependencies = re.findall(r"\(NEEDED\).*?\[(.*?)\]", linkage)
+            if any("libpython" in item.lower() or "libllvm" in item.lower() for item in dependencies):
+                raise RuntimeError(label + " unexpectedly links an external compiler/Python runtime")
+            row["dynamic_dependencies"] = dependencies
+            row["dynamic_dependency_inspector"] = "readelf -d"
         row["status"] = "COMPILED"
     except BaseException as exc:
         row["status"] = "TIMEOUT" if isinstance(exc, subprocess.TimeoutExpired) else "FAILED"
@@ -200,6 +208,8 @@ def main():
                         help="optional core Stage1 build receipt for this native executable")
     parser.add_argument("--include-asyncio-vthread", action="store_true",
                         help="also compare the asyncio-on-vthreads prototype and CPython gather")
+    parser.add_argument("--include-asyncio-gather", action="store_true",
+                        help="also run CPython gather, without compiling the diagnostic prototype")
     parser.add_argument("--rounds", type=int, default=10)
     parser.add_argument("--zero-delay-requests", type=int, default=5000,
                         help="minimum requests per run when delay=0")
@@ -265,6 +275,14 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
         cpu_model = subprocess.check_output(
             ["sysctl", "-n", "machdep.cpu.brand_string"], text=True, timeout=10
         ).strip()
+    elif sys.platform == "linux":
+        try:
+            for line in Path("/proc/cpuinfo").read_text().splitlines():
+                if line.startswith("model name"):
+                    cpu_model = line.split(":", 1)[1].strip()
+                    break
+        except OSError:
+            pass
     gateway_identity = git_source_identity(ROOT)
     core_identity = git_source_identity(core)
     report = {
@@ -276,6 +294,8 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
         "machine": platform.machine(),
         "cpu_model": cpu_model,
         "cpu_count": os.cpu_count(),
+        "process_cpu_count": os.process_cpu_count(),
+        "cpu_affinity": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
         "python_version": sys.version,
         "python_executable": sys.executable,
         "python_executable_sha256": digest(sys.executable),
@@ -307,6 +327,8 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
             "PCC_DISABLE_BULK_GENERATOR_FRAME_INIT", "PCC_GENERATOR_FIRST_ENTRY_INIT",
             "PCC_FAST_COMPLETED_CONTINUATIONS", "PCC_DIRECT_GENERATOR_TASKS",
             "PCC_KNOWN_OBJECT_REFS", "PCC_PYTHON_IR_PASSES",
+            "PCC_NO_AUTO_PCC1", "PYTHONPATH", "PCC_SOURCE_ROOT", "PCC_REPO_ROOT",
+            "PCC_RUNTIME_ARCHIVE", "PCC_RUNTIME_CC",
             "PCC_DIRECT_INDEXED_KERNEL_CAPTURE", "PCC_DIRECT_INDEXED_KERNEL_EMIT",
             "PCC_DIRECT_INDEXED_NATIVE_OBJECT")},
         "warmup_batches": 2,
@@ -331,10 +353,11 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
         if not args.pcc1_binary or receipt.get("compiler_sha256") != digest(args.pcc1_binary):
             parser.error("--pcc1-receipt must match --pcc1-binary")
         report["pcc1_receipt"] = {
-            key: receipt[key] for key in (
+            "path": str(args.pcc1_receipt.resolve()), "sha256": digest(args.pcc1_receipt),
+            **{key: receipt[key] for key in (
                 "schema", "status", "compiler_sha256", "runtime_bundle_sha256",
                 "source_manifest_sha256",
-            )
+            )}
         }
     save(args.output, report)
     args.output.with_suffix(".md").write_text("Comparison in progress; no complete results yet.\n")
@@ -345,6 +368,10 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
         save(args.output, report)
     commands = {"asyncio": [sys.executable, str(ROOT / "benchmark_asyncio.py")]}
     workloads = [("", ROOT / "benchmark_native.py")]
+    if getattr(args, "include_asyncio_gather", False) and not args.include_asyncio_vthread:
+        gather = ROOT / "benchmark_asyncio_gather.py"
+        commands["asyncio-gather"] = [sys.executable, str(gather)]
+        report["sources"][str(gather.relative_to(ROOT))] = digest(gather)
     if args.include_asyncio_vthread:
         prototype = ROOT / "benchmarks/prototypes/benchmark_asyncio_gather_vthread.py"
         adapter = ROOT / "benchmarks/prototypes/asyncio_vthread.py"
@@ -463,6 +490,19 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
     observer = report.get("resource_observer")
     if observer and digest(observer["path"]) != observer["sha256"]:
         raise RuntimeError("resource observer changed during comparison")
+    identities = [(sys.executable, report["python_executable_sha256"])]
+    for row in report["compilers"].values():
+        # A strict adapter may record its own artifact evidence instead.
+        if {"path", "sha256", "command", "artifact_sha256"} <= set(row):
+            identities.extend([(row["path"], row["sha256"]),
+                               (row["command"][-1], row["artifact_sha256"])])
+    if args.pcc1_binary:
+        identities.append((args.pcc1_binary, report["pcc1_binary"]["sha256"]))
+    if args.pcc1_receipt:
+        identities.append((args.pcc1_receipt, report["pcc1_receipt"]["sha256"]))
+    for path, original in identities:
+        if digest(path) != original:
+            raise RuntimeError("compiler/interpreter/artifact changed during comparison: " + str(path))
     report["load_average_end"] = os.getloadavg() if hasattr(os, "getloadavg") else None
     report["complete"] = not pending_completion
     report["status"] = "PENDING_PROCESS_CLEANUP" if pending_completion else "COMPLETE"

@@ -1,0 +1,59 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/run-samples.tsv",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/run.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/run.stdout"
+  },
+  "command": [
+    "benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/probe"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T08:33:33.194050+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc-gateway",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 5.118218621999404,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_GC_BACKEND": "0",
+    "PCC_VTHREAD_IO_BACKEND": "epoll",
+    "PCC_WITH_THREADS": "0",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 1,
+  "largest_process_observed": {
+    "command": "benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/probe",
+    "elapsed_s": 0.005134,
+    "manifest_paths": [],
+    "pid": 5,
+    "ppid": 2,
+    "rss_bytes": 10461184
+  },
+  "max_tree_rss_bytes": 2147483648,
+  "peak_process_count": 1,
+  "peak_tree_rss_bytes": 10461184,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": -15,
+  "sample_count": 21,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T08:33:28.075840+00:00",
+  "status": "TIMEOUT",
+  "terminal_processes": [
+    {
+      "command": "benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/probe",
+      "manifest_paths": [],
+      "pid": 5,
+      "ppid": 2,
+      "rss_bytes": 10461184
+    }
+  ],
+  "timeout_s": 5.0
+}

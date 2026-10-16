@@ -1,0 +1,131 @@
+{
+  "cleanup": {
+    "11": "not present",
+    "12": "not present"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py"
+  ],
+  "expected_server_requests": 24,
+  "observer": {
+    "archived_log": "benchmarks/results/2026-10-02-linux-observer/observer-build.log",
+    "build_timeout_seconds": 30,
+    "command": [
+      "/usr/bin/x86_64-linux-gnu-gcc-14",
+      "-std=c11",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/process_observer.c",
+      "-o",
+      "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/process-observer"
+    ],
+    "compiler": "/usr/bin/x86_64-linux-gnu-gcc-14",
+    "compiler_sha256": "a23ecab8ff08f09ad8c80602c2c5df7f49e09c25905cb8975902e101bf72635f",
+    "instructions": "unavailable: wait4 does not supply hardware instruction/cycle counts",
+    "log": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/process-observer-build.log",
+    "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/durable-observer/process-observer",
+    "scope": "External observation tooling only; never a native artifact producer",
+    "sha256": "045f5649d19787741e8d542657eb5c2559dac0bdcdf6854a3dbb05d161d50580",
+    "source": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/process_observer.c",
+    "source_sha256": "6157596a822364d6e961afabdfd237d274823817f4bdf42e8611749df87957a2"
+  },
+  "python_sha256": "56045822d9c10027323c6f24ac5876901915b1c3ff8bfc6591d363c280246c82",
+  "python_version": "3.15.0rc1 (main, Aug 25 2026, 14:02:32) [Clang 22.1.3 ]",
+  "run": {
+    "closure": {
+      "active_writers": 0,
+      "connections_active": 0,
+      "requests_active": 0,
+      "requests_started": 24,
+      "writers": 0
+    },
+    "concurrency": 3,
+    "delay_ms": 0,
+    "elapsed_ms": 1.6047050012275577,
+    "functional_gate": {
+      "active_request_survived_graceful_shutdown": true,
+      "ambiguous_framing_rejected": true,
+      "disconnect_sent": true,
+      "failed_child_cancelled_and_drained": true,
+      "failure_seconds": 0.005910773998039076,
+      "fragmented_request": true,
+      "not_found": true
+    },
+    "latencies_ms": [
+      0.37122799767530523,
+      0.32840399944689125,
+      0.3952350016334094,
+      0.2895659999921918,
+      0.44873599836137146,
+      0.2509969999664463,
+      0.42548000055830926,
+      0.32586099769105203,
+      0.4765170015161857,
+      0.23764700017636642,
+      0.4340430023148656,
+      0.35277999995741993
+    ],
+    "observations": {
+      "receipt": {
+        "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/asyncio-smoke.process.json",
+        "sha256": "1179de6708fab785e4b1366fecad56c15ecc20a2a7a8d9bef7e3363557c7b8fb"
+      },
+      "stderr": {
+        "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/asyncio-smoke.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/asyncio-smoke.stdout",
+        "sha256": "cb25285bf25f82a19feff526a612c350fb8c3171430f01223a38549df9c69108"
+      }
+    },
+    "observer_pid": 11,
+    "process_cpu_seconds": 0.770696,
+    "process_involuntary_context_switches": 169,
+    "process_major_page_faults": 0,
+    "process_minor_page_faults": 10638,
+    "process_peak_rss_bytes": 49299456,
+    "process_real_seconds": 1.07330976,
+    "process_sys_seconds": 0.007623,
+    "process_user_seconds": 0.763073,
+    "process_voluntary_context_switches": 21,
+    "requests": 12,
+    "requests_per_second": 7478.009971191161,
+    "rounds": 4,
+    "warmup_requests": 6
+  },
+  "scope": "Functional asyncio subprocess/observer/HTTP shutdown smoke only; no throughput claim",
+  "source_hashes": {
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py": "11cc25c18c974b670dfc68e9db496f7039a7bbf6be000723e3254c4f9e03374c",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/compare.py": "35bbfe30a848bddfb0032a9742b588657e32f3318acc07ebe21b86fc271ef181",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/http_compare.py": "c6502cec48a1af710982e24b1de988ae2f0f7fd802f22d823ee1504beb1f9a4e",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/http_compile.py": "1358aafb072c30c2d044d84407cdeeadbe0969f3ecd40facb585d0b4ee73dff3",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/http_contract.py": "506524f47f90f01fcf5ba9fa64cc4dd45d7b7214ac15471f02d9755a793609f3",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/observation.py": "9deccb2bda05d500f18f9542dde7e1d5f5652f454e117256ab7a7cab8cf5c1ad",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/processes.py": "74512db2fa3420bd904d88ac31b19da2ea2d9a61a5ab4299d4fae8773f7a5b04",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/run-asyncio-smoke.py": "80ed69f8fa2f82a3cbe10980c12e8fafd05b8f923f169cd4643257f7dc8fc2a8",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/__init__.py": "caea0c5d5805d8bba4f5b2e44aca323f4abbab33ffc78e777797a3c4c32eddd5",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/buffer.py": "c2c667ead0972aab51f6fc7cd0b7ece22312b2da7eeed0e3fe16fadca8eb1dba",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/channel.py": "b93a3f1dee944b9076732a3ee64ed83429ddf0f55736db85a56e27a3369d560f",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/config.py": "c67ff65dcecd96509a7502360a2eda314447a89801f9f6130ba4fc2ca4faf123",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/control.py": "3316b3c7111790c28390d55a6ab89b3bd5ba54e5f0421fb6c42c664f12b898d9",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/dns.py": "b9a748842142e3b4239a6559657363112b9c599790aeb42ab1928a8ba06e066b",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/dns_native.py": "81ec8d280455fb3974a640d3ec3b0777a6e77a07f85594d7cebc9d3a33201fb4",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/http1.py": "4dbbb3fea97531a9bfea76a81624529a947b6a8b7730392121fe5a9d086260fc",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/lifecycle.py": "0277d8112a708103738d094f802d8f233fa93f2be5015713c617f54bfee31463",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/models.py": "5c95c397f69b05e7dcf5ca360338634b184236d4b1402b7fee4ec2c69a7af340",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/proxy.py": "cc455ee2fd697a760926a61c816de8218005daf9f4e826b259683bd0554e4bdf",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/proxy_http1.py": "60f5578144067e0d6bce5718d85e6c5b7e87a5fd14539adedb60dff70dc076f3",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/routing.py": "d01842fe795e95a2242eab4f130af9a9850012d235f29f42aa26304e956aabde",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/server.py": "e92760de7917fdc275a0eb7e580102838308672df0c00d18269fbe8a6e03b96d",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/structured.py": "263e9dce7740b6b74317ac170f2c5224c52772f64bd4d7b9c54c84a70cbbac54",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/tls.py": "283a30aad36ffafbf5f80cf3e1905f1ec8ec2affc1acd5e12b89e1508d44b439",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/web/__init__.py": "e0975b19093f85093673f56c6f570de5502f1b6db5591877188ad69c6a30aea2",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/web/app.py": "1a236d081d1ad5845e9cadb3aa2740f7717e1f7cacbf3089398943c10f7d5d9a",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/pcc_gateway/web/models.py": "2cccbb3e48ea2eaf8c921ebce4abb749ad94d43b354eb40a5f19a2ec995a42d4"
+  },
+  "status": "PASS"
+}

@@ -1,0 +1,43 @@
+============================= test session starts ==============================
+platform linux -- Python 3.15.0rc1, pytest-9.0.3, pluggy-1.6.0 -- /workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/scratch/ce254c0a0910/pcc-gateway
+configfile: pyproject.toml
+plugins: xdist-3.8.0
+collecting ... collected 33 items
+
+tests/test_benchmark_observation.py::test_workload_protocol_requires_exact_counts_and_clean_output PASSED [  3%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[requests-3] PASSED [  6%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[requests-4.0] PASSED [  9%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[warmup_requests-3] PASSED [ 12%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[concurrency-True] PASSED [ 15%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[rounds-1] PASSED [ 18%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[delay_ms-1] PASSED [ 21%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[latencies_ms-value6] PASSED [ 24%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[latencies_ms-value7] PASSED [ 27%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[latencies_ms-value8] PASSED [ 30%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[latencies_ms-value9] PASSED [ 33%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[elapsed_ms-inf] PASSED [ 36%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[elapsed_ms-0] PASSED [ 39%]
+tests/test_benchmark_observation.py::test_workload_protocol_rejects_incomplete_or_invalid_measurements[elapsed_ms-True] PASSED [ 42%]
+tests/test_benchmark_observation.py::test_observer_preserves_workload_streams_and_real_cpu_rss PASSED [ 45%]
+tests/test_benchmark_observation.py::test_cpython_workloads_emit_valid_matching_protocol[0-benchmark_asyncio.py] PASSED [ 48%]
+tests/test_benchmark_observation.py::test_cpython_workloads_emit_valid_matching_protocol[0-benchmark_asyncio_gather.py] PASSED [ 51%]
+tests/test_benchmark_observation.py::test_cpython_workloads_emit_valid_matching_protocol[10-benchmark_asyncio.py] PASSED [ 54%]
+tests/test_benchmark_observation.py::test_cpython_workloads_emit_valid_matching_protocol[10-benchmark_asyncio_gather.py] PASSED [ 57%]
+tests/test_benchmark_observation.py::test_observer_trivial_exec_does_not_inherit_python_rss_floor PASSED [ 60%]
+tests/test_benchmark_observation.py::test_observer_verifies_platform_rss_units[linux-KiB-1024] PASSED [ 63%]
+tests/test_benchmark_observation.py::test_observer_verifies_platform_rss_units[darwin-bytes-1] PASSED [ 66%]
+tests/test_benchmark_observation.py::test_observer_failure_retains_exit_status_and_raw_logs PASSED [ 69%]
+tests/test_benchmark_observation.py::test_observer_timeout_cleans_workload_descendants PASSED [ 72%]
+tests/test_benchmark_observation.py::test_comparison_keeps_rotating_paired_arms_and_portable_receipts PASSED [ 75%]
+tests/test_benchmark_compile_receipts.py::test_compile_receipt_survives_each_command_outcome[timeout] PASSED [ 78%]
+tests/test_benchmark_compile_receipts.py::test_compile_receipt_survives_each_command_outcome[failure] PASSED [ 81%]
+tests/test_benchmark_compile_receipts.py::test_compile_receipt_survives_each_command_outcome[success] PASSED [ 84%]
+tests/test_benchmark_compile_receipts.py::test_linux_compile_receipt_rejects_external_python_or_llvm[libpython3.15.so.1.0] PASSED [ 87%]
+tests/test_benchmark_compile_receipts.py::test_linux_compile_receipt_rejects_external_python_or_llvm[libLLVM.so.21] PASSED [ 90%]
+tests/test_benchmark_process_cleanup.py::test_timeout_and_parent_exit_clean_the_benchmark_group[True] PASSED [ 93%]
+tests/test_benchmark_process_cleanup.py::test_timeout_and_parent_exit_clean_the_benchmark_group[False] PASSED [ 96%]
+tests/test_benchmark_process_cleanup.py::test_sigterm_to_runner_cleans_its_command PASSED [100%]
+
+============================== 33 passed in 1.39s ==============================

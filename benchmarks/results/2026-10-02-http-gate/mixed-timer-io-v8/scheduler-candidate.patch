@@ -1,0 +1,65 @@
+--- ../pcc-cloud-runs/source-v8-export-errors-astra/pcc/runtime/py/py_virtual_thread_runtime.py	2026-10-02 01:09:21.518789676 -0700
++++ ../pcc/pcc/runtime/py/py_virtual_thread_runtime.py	2026-10-02 01:38:47.516810997 -0700
+@@ -1987,9 +1987,29 @@
+     store_i64(vthread, 120, 1)
+     _effect(1, 2, 1, -1)
+     _effect(8, 2, 0, load_i64(vthread, 32))
++    # The IO wait owner snapshots the ordinary timer head under this same
++    # scheduler mutex. If insertion advances that head after preparation,
++    # wake its retained eventfd/EVFILT_USER notification before it can sleep
++    # past the new deadline. The fully linked timer/root remains owned even
++    # if the platform interrupt reports an error.
++    if ptr_is_null(previous) and _io_interrupt_locked() != 0:
++        return -1
+     return 0
+ 
+ 
++def _scheduler_wait_deadline_locked(now: int, timeout_ms: int) -> int:
++    """Bound an IO wait by the earliest ordinary sleep timer as well."""
++    deadline = -1
++    if timeout_ms >= 0:
++        deadline = now + timeout_ms
++    timer = global_load_ptr("pcc_vthread_timer_head_py")
++    if ptr_is_null(timer) == 0:
++        timer_deadline = load_i64(timer, 8)
++        if deadline < 0 or timer_deadline < deadline:
++            deadline = timer_deadline
++    return deadline
++
++
+ # IO node: thread@0, fd@8, events@16, deadline@24, next@32, root@40.
+ def _io_alloc():
+     node = global_load_ptr("pcc_vthread_io_free_py")
+@@ -2713,13 +2733,19 @@
+     backend = load_i32(global_addr("pcc_vthread_waitset_backend_py"), 0)
+     result = stack_alloc(32)
+     now = _now_ms()
++    # A quiet fd and a pending sleep timer must not turn an outer stepping
++    # driver into an infinite kernel wait. Preparation and timer insertion
++    # share this lock; _timer_add interrupts an already-prepared later wait.
++    wait_deadline = _scheduler_wait_deadline_locked(now, timeout_ms)
+     if backend == 0:
+         node = global_load_ptr("pcc_vthread_io_head_py")
+         used_timeout = 0
+         while ptr_is_null(node) == 0:
+             wait = 0
+             if used_timeout == 0 and timeout_ms > 0:
+-                wait = timeout_ms
++                wait = wait_deadline - now
++                if wait < 0:
++                    wait = 0
+                 used_timeout = 1
+             revents = poll_fd(load_i64(node, 8), load_i64(node, 16), wait)
+             if revents < 0:
+@@ -2738,11 +2764,6 @@
+         if load_i32(global_addr("pcc_vthread_wait_active_py"), 0) != 0:
+             _scheduler_unlock()
+             return 0
+-        wait_deadline = now
+-        if timeout_ms < 0:
+-            wait_deadline = -1
+-        else:
+-            wait_deadline = now + timeout_ms
+         batch = stack_alloc(64)
+         if pcc_io_waitset_wait_prepare(
+             global_addr("pcc_vthread_waitset_py"),

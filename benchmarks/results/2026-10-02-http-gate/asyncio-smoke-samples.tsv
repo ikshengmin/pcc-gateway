@@ -1,0 +1,7 @@
+elapsed_s	tree_rss_bytes	process_count	largest_pid	largest_rss_bytes	largest_command
+0.005454	5545984	1	8	5545984	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python benchmarks/results/2026-10-02-http-gate/run-asyncio-smoke.py
+0.262278	64397312	3	12	36302848	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python /workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py 54017
+0.516293	74285056	3	12	46190592	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python /workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py 54017
+0.77064	75862016	3	12	47767552	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python /workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py 54017
+1.023624	77094912	3	12	49000448	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python /workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py 54017
+1.276487	0	1	0	0	

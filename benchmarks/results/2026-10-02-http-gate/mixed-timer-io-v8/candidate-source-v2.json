@@ -1,0 +1,17 @@
+{
+  "files": {
+    "/workspace/scratch/ce254c0a0910/pcc/pcc/runtime/py/py_virtual_thread_runtime.py": "245638f70a83ee149ec88a5a8d1dc9f9ab4ce60aa376f666c9bb3d6c9cd059a2",
+    "/workspace/scratch/ce254c0a0910/pcc/tests/python/test_vthread_timer_io_deadline.py": "a1071fc085e0484865e600f349860bb6108e64e0bc65afdbbaa042969cbc75a8"
+  },
+  "host_cases_passed": 11,
+  "native_control": "original mixed_timer_io_probe.py unchanged; v8 epoll run timed out after5s",
+  "rejected_candidate": "candidate-source.json and scheduler-candidate.patch retained as initial untested post-publication-error design, rejected by caller audit",
+  "scope": "Ordinary timer deadline in IO waits with transactional pre-publication interrupt; no persistent carrier or STW redesign",
+  "status": "HOST_MODELS_PASS_NATIVE_CANDIDATE_UNRUN",
+  "watchdog": {
+    "elapsed_s": 2.2891817140007333,
+    "peak_tree_rss_bytes": 78422016,
+    "returncode": 0,
+    "status": "COMPLETE"
+  }
+}

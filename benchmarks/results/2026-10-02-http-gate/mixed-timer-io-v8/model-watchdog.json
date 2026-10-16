@@ -1,0 +1,70 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc/../pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/model-samples.tsv",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc/../pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/model.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc/../pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed-timer-io-v8/model.stdout"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer",
+    "tests/python/test_vthread_timer_io_deadline.py::test_earlier_timer_interrupts_before_commit_under_scheduler_lock",
+    "tests/python/test_vthread_timer_io_deadline.py::test_timer_interrupt_error_leaves_sleep_caller_unchanged",
+    "tests/python/test_vthread_timer_io_deadline.py::test_deadline_snapshot_and_wait_ownership_share_the_scheduler_lock",
+    "-o",
+    "addopts=",
+    "-x",
+    "-n0",
+    "-vv",
+    "--tb=short"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T08:47:21.343789+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 2.2891817140007333,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_NO_AUTO_PCC1": "1",
+    "PCC_TEST_NO_NATIVE_PROVISIONING": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 1,
+  "largest_process_observed": {
+    "command": "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer tests/python/test_vthread_timer_io_deadline.py::test_earlier_timer_interrupts_before_commit_under_scheduler_lock tests/python/test_vthread_timer_io_deadline.py::test_timer_interrupt_error_leaves_sleep_caller_unchanged tests/python/test_vthread_timer_io_deadline.py::test_deadline_snapshot_and_wait_ownership_share_the_scheduler_lock -o addopts= -x -n0 -vv --tb=short",
+    "elapsed_s": 1.273285,
+    "manifest_paths": [],
+    "pid": 6,
+    "ppid": 5,
+    "rss_bytes": 78422016
+  },
+  "max_tree_rss_bytes": 1073741824,
+  "peak_process_count": 1,
+  "peak_tree_rss_bytes": 78422016,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": 0,
+  "sample_count": 10,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T08:47:19.054609+00:00",
+  "status": "COMPLETE",
+  "terminal_processes": [
+    {
+      "command": "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer tests/python/test_vthread_timer_io_deadline.py::test_earlier_timer_interrupts_before_commit_under_scheduler_lock tests/python/test_vthread_timer_io_deadline.py::test_timer_interrupt_error_leaves_sleep_caller_unchanged tests/python/test_vthread_timer_io_deadline.py::test_deadline_snapshot_and_wait_ownership_share_the_scheduler_lock -o addopts= -x -n0 -vv --tb=short",
+      "manifest_paths": [],
+      "pid": 6,
+      "ppid": 5,
+      "rss_bytes": 0
+    }
+  ],
+  "timeout_s": 120.0
+}

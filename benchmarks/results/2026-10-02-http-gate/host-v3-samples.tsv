@@ -1,0 +1,8 @@
+elapsed_s	tree_rss_bytes	process_count	largest_pid	largest_rss_bytes	largest_command
+0.008547	5963776	1	6	5963776	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short
+0.26197	51781632	1	6	51781632	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short
+0.515102	62763008	1	6	62763008	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short
+0.768125	66093056	1	6	66093056	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short
+1.021562	67436544	1	6	67436544	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short
+1.274446	67452928	1	6	67452928	/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python -m pytest tests/test_benchmark_http.py -o addopts= -x -n0 -vv --tb=short
+1.527294	0	1	0	0	

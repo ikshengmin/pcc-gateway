@@ -1,0 +1,41 @@
+============================= test session starts ==============================
+platform linux -- Python 3.15.0rc1, pytest-9.0.3, pluggy-1.6.0 -- /workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/scratch/ce254c0a0910/pcc-gateway
+configfile: pyproject.toml
+plugins: xdist-3.8.0
+collecting ... collected 31 items
+
+tests/test_benchmark_layers.py::test_layer_payload_and_declared_wait_shape[scope] PASSED [  3%]
+tests/test_benchmark_layers.py::test_layer_payload_and_declared_wait_shape[direct] PASSED [  6%]
+tests/test_benchmark_layers.py::test_layer_payload_and_declared_wait_shape[json-only] PASSED [  9%]
+tests/test_benchmark_layers.py::test_layer_failure_cancels_and_drains_the_sibling[scope] PASSED [ 12%]
+tests/test_benchmark_layers.py::test_layer_failure_cancels_and_drains_the_sibling[direct] PASSED [ 16%]
+tests/test_gateway_structured_concurrency.py::test_root_driver_waits_when_a_scheduler_step_is_idle PASSED [ 19%]
+tests/test_gateway_structured_concurrency.py::test_scope_forks_every_child_before_the_barrier_joins_any PASSED [ 22%]
+tests/test_gateway_structured_concurrency.py::test_first_failure_cancels_later_siblings_and_propagates PASSED [ 25%]
+tests/test_gateway_structured_concurrency.py::test_failure_is_reported_in_fork_order_not_completion_order PASSED [ 29%]
+tests/test_gateway_structured_concurrency.py::test_rejoining_a_failed_scope_reraises_the_same_failure PASSED [ 32%]
+tests/test_gateway_structured_concurrency.py::test_close_drains_children_when_the_scope_body_never_joined PASSED [ 35%]
+tests/test_gateway_structured_concurrency.py::test_close_is_idempotent_and_a_noop_after_a_successful_join PASSED [ 38%]
+tests/test_gateway_http1_codec.py::test_fragmented_keep_alive_requests_emit_typed_events PASSED [ 41%]
+tests/test_gateway_http1_codec.py::test_ambiguous_and_malformed_framing_fails_closed PASSED [ 45%]
+tests/test_gateway_http1_codec.py::test_feed_error_releases_undelivered_body_chunk_owner_exactly_once[z\r\n-bad-chunk-size] PASSED [ 48%]
+tests/test_gateway_http1_codec.py::test_feed_error_releases_undelivered_body_chunk_owner_exactly_once[2\r\ndeXX-bad-chunk-ending] PASSED [ 51%]
+tests/test_gateway_http1_codec.py::test_feed_error_releases_undelivered_body_chunk_owner_exactly_once[0\r\nContent-Length: 1\r\n\r\n-forbidden-trailer] PASSED [ 54%]
+tests/test_gateway_http1_codec.py::test_successful_feed_transfers_body_chunk_owner_without_releasing PASSED [ 58%]
+tests/test_gateway_buffers.py::test_channel_reports_exact_high_and_low_transitions PASSED [ 61%]
+tests/test_gateway_buffers.py::test_close_releases_all_queued_views_once PASSED [ 64%]
+tests/test_gateway_lifecycle.py::test_drain_stops_admission_before_active_scope_completion PASSED [ 67%]
+tests/test_gateway_lifecycle.py::test_generation_resource_callbacks_can_reenter_lifecycle_without_deadlock PASSED [ 70%]
+tests/test_gateway_local_streaming.py::test_pending_child_cleanup_wakes_cancels_joins_and_releases_once PASSED [ 74%]
+tests/test_gateway_local_streaming.py::test_stalled_high_water_body_wait_observes_request_deadline PASSED [ 77%]
+tests/test_gateway_local_streaming.py::test_stream_completion_takes_owner_before_reentrant_close PASSED [ 80%]
+tests/test_gateway_server.py::test_connection_transport_parks_read_and_write_without_blocking_carrier PASSED [ 83%]
+tests/test_gateway_server.py::test_proxy_attempt_cleanup_releases_every_owner_after_callback_failures PASSED [ 87%]
+tests/test_gateway_server.py::test_connection_open_hook_failure_still_closes_every_connection_owner PASSED [ 90%]
+tests/test_gateway_server.py::test_tls_close_notify_provider_failure_still_closes_all_owners PASSED [ 93%]
+tests/test_gateway_server.py::test_shutdown_retires_accept_owner_before_stopping_carriers PASSED [ 96%]
+tests/test_gateway_server.py::test_shutdown_waits_past_resource_release_for_task_terminal_outcome PASSED [100%]
+
+============================== 31 passed in 0.68s ==============================

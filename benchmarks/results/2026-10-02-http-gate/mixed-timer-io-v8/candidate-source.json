@@ -1,0 +1,9 @@
+{
+  "files": {
+    "/workspace/scratch/ce254c0a0910/pcc/pcc/runtime/py/py_virtual_thread_runtime.py": "cf37f02ae0d1463af78c48cda9e202034eabcbf7de505f71480a3294bb99feff",
+    "/workspace/scratch/ce254c0a0910/pcc/tests/python/test_vthread_timer_io_deadline.py": "27b5cd7b48268c73e48be989effda36b13bd4ac99caed9dd16014cd4254de2e8"
+  },
+  "native_control": "mixed_timer_io_probe.py unchanged; original v8 epoll run timed out after5s",
+  "scope": "Ordinary timer deadline in IO waits, including earlier-head wake publication; no persistent carrier or STW redesign",
+  "status": "SOURCE_CANDIDATE_UNRUN"
+}

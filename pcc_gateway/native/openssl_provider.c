@@ -31,6 +31,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__linux__)
+#include <sys/socket.h>
+#endif
 
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -38,6 +41,7 @@
 #include <openssl/sslerr.h>
 #include <openssl/tls1.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 
 #if defined(OPENSSL_IS_BORINGSSL) || defined(BORINGSSL_API_VERSION)
 #error "BoringSSL requires a separately reviewed pcc TLS provider"
@@ -61,6 +65,7 @@ typedef struct pcc_openssl_context {
     SSL_CTX *ssl_ctx;
     unsigned char *alpn;
     unsigned int alpn_len;
+    int is_client;
 } pcc_openssl_context;
 
 typedef struct pcc_openssl_connection {
@@ -68,7 +73,92 @@ typedef struct pcc_openssl_connection {
     int client_hello_pending;
     int client_hello_resumed;
     int handshake_complete;
+    int is_client;
+    int fd;
+    BIO_METHOD *socket_method;
 } pcc_openssl_connection;
+
+#if defined(__linux__)
+/* A numeric descriptor borrow, not a socket owner. MSG_NOSIGNAL protects each
+ * write without altering the host application's signal handlers or masks. */
+static int pcc_tls_bio_create(BIO *bio)
+{
+    BIO_set_init(bio, 1);
+    BIO_set_shutdown(bio, 0);
+    BIO_set_data(bio, NULL);
+    return 1;
+}
+
+static int pcc_tls_bio_destroy(BIO *bio)
+{
+    if (bio == NULL)
+        return 0;
+    BIO_set_data(bio, NULL);
+    BIO_set_init(bio, 0);
+    return 1;
+}
+
+static int pcc_tls_bio_read(BIO *bio, char *output, int length)
+{
+    pcc_openssl_connection *connection = BIO_get_data(bio);
+    ssize_t count;
+    BIO_clear_retry_flags(bio);
+    if (connection == NULL || output == NULL || length <= 0)
+        return 0;
+    count = recv(connection->fd, output, (size_t)length, 0);
+    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+        BIO_set_retry_read(bio);
+    return (int)count;
+}
+
+static int pcc_tls_bio_write(BIO *bio, const char *input, int length)
+{
+    pcc_openssl_connection *connection = BIO_get_data(bio);
+    ssize_t count;
+    BIO_clear_retry_flags(bio);
+    if (connection == NULL || input == NULL || length <= 0)
+        return 0;
+    count = send(connection->fd, input, (size_t)length, MSG_NOSIGNAL);
+    if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+        BIO_set_retry_write(bio);
+    return (int)count;
+}
+
+static long pcc_tls_bio_ctrl(BIO *bio, int command, long value, void *pointer)
+{
+    pcc_openssl_connection *connection = BIO_get_data(bio);
+    (void)value;
+    if (command == BIO_CTRL_FLUSH || command == BIO_CTRL_DUP)
+        return 1;
+    if (command == BIO_C_GET_FD && connection != NULL) {
+        if (pointer != NULL)
+            *(int *)pointer = connection->fd;
+        return connection->fd;
+    }
+    return 0;
+}
+
+static int pcc_tls_attach_client_socket(pcc_openssl_connection *connection, int fd)
+{
+    BIO *bio;
+    connection->fd = fd;
+    connection->socket_method = BIO_meth_new(
+        BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "pcc-nonblocking-nosignal");
+    if (connection->socket_method == NULL
+        || !BIO_meth_set_create(connection->socket_method, pcc_tls_bio_create)
+        || !BIO_meth_set_destroy(connection->socket_method, pcc_tls_bio_destroy)
+        || !BIO_meth_set_read(connection->socket_method, pcc_tls_bio_read)
+        || !BIO_meth_set_write(connection->socket_method, pcc_tls_bio_write)
+        || !BIO_meth_set_ctrl(connection->socket_method, pcc_tls_bio_ctrl))
+        return 0;
+    bio = BIO_new(connection->socket_method);
+    if (bio == NULL)
+        return 0;
+    BIO_set_data(bio, connection);
+    SSL_set_bio(connection->ssl, bio, bio);
+    return 1;
+}
+#endif
 
 static int pcc_tls_reject_private_key_password(char *buffer, int size,
                                                int writing, void *argument)
@@ -295,6 +385,10 @@ static int64_t pcc_tls_probe(pcc_tls_provider_v1_request *request)
         | PCC_TLS_CAP_NONBLOCKING
         | PCC_TLS_CAP_CLOSE_NOTIFY
         | PCC_TLS_CAP_CLIENT_CERTIFICATE;
+#if defined(__linux__)
+    request->flags |= PCC_TLS_CAP_CLIENT
+        | PCC_TLS_CAP_VERIFY_HOSTNAME;
+#endif
     return pcc_tls_finish(request, PCC_TLS_OK, PCC_TLS_ERR_NONE);
 }
 
@@ -433,12 +527,102 @@ static int64_t pcc_tls_context_free(pcc_tls_provider_v1_request *request)
     return pcc_tls_finish(request, PCC_TLS_CLOSED, PCC_TLS_ERR_NONE);
 }
 
+static int64_t pcc_tls_client_context_create(pcc_tls_provider_v1_request *request)
+{
+#if !defined(__linux__)
+    /* No process-signal fallback on platforms without the qualified BIO. */
+    return pcc_tls_error(request, PCC_TLS_ERR_CONFIGURATION);
+#else
+    pcc_openssl_context *context = NULL;
+    char *ca_path = NULL;
+    int64_t error = PCC_TLS_ERR_CONFIGURATION;
+    if (request->flags != 0 || request->input1_len != 0
+        || request->input3_len != 0)
+        goto failed;
+    if (request->input0_len != 0) {
+        ca_path = pcc_tls_copy_path(request->input0, request->input0_len);
+        if (ca_path == NULL || ca_path[0] != '/')
+            goto failed;
+    }
+    context = calloc(1, sizeof(*context));
+    error = PCC_TLS_ERR_PROVIDER;
+    if (context == NULL)
+        goto failed;
+    context->is_client = 1;
+    error = PCC_TLS_ERR_CONFIGURATION;
+    if (!pcc_tls_parse_alpn(request->input2, request->input2_len,
+                            &context->alpn, &context->alpn_len))
+        goto failed;
+    error = PCC_TLS_ERR_PROVIDER;
+    context->ssl_ctx = SSL_CTX_new(TLS_client_method());
+    if (context->ssl_ctx == NULL
+        || !SSL_CTX_set_min_proto_version(context->ssl_ctx, TLS1_2_VERSION)
+        || !SSL_CTX_set_max_proto_version(context->ssl_ctx, TLS1_3_VERSION))
+        goto failed;
+    SSL_CTX_set_options(context->ssl_ctx,
+                        SSL_OP_NO_COMPRESSION | SSL_OP_NO_RENEGOTIATION);
+    SSL_CTX_set_security_level(context->ssl_ctx, 2);
+    SSL_CTX_set_mode(context->ssl_ctx,
+                     SSL_MODE_ENABLE_PARTIAL_WRITE
+                     | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
+                     | SSL_MODE_RELEASE_BUFFERS);
+    SSL_CTX_set_verify(context->ssl_ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify_depth(context->ssl_ctx, 9);
+    error = PCC_TLS_ERR_CERTIFICATE;
+    if (ca_path != NULL) {
+        if (SSL_CTX_load_verify_locations(context->ssl_ctx, ca_path, NULL) != 1)
+            goto failed;
+    } else if (SSL_CTX_set_default_verify_paths(context->ssl_ctx) != 1) {
+        goto failed;
+    }
+    free(ca_path);
+    request->primary = context;
+    return pcc_tls_finish(request, PCC_TLS_OK, PCC_TLS_ERR_NONE);
+failed:
+    if (context != NULL) {
+        SSL_CTX_free(context->ssl_ctx);
+        free(context->alpn);
+        free(context);
+    }
+    free(ca_path);
+    request->primary = NULL;
+    return pcc_tls_error(request, error);
+#endif
+}
+
+static int pcc_tls_dns_identity_valid(const char *name, size_t length)
+{
+    size_t index;
+    size_t label_length = 0;
+    int non_numeric = 0;
+    if (length == 0 || length > PCC_TLS_SNI_MAX)
+        return 0;
+    for (index = 0; index < length; ++index) {
+        unsigned char c = (unsigned char)name[index];
+        if (c == '.') {
+            if (label_length == 0 || name[index - 1] == '-')
+                return 0;
+            label_length = 0;
+        } else {
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                  || c == '-') || (label_length == 0 && c == '-'))
+                return 0;
+            if (c < '0' || c > '9')
+                non_numeric = 1;
+            if (++label_length > 63)
+                return 0;
+        }
+    }
+    /* IP literals require a separately declared IP-SAN capability. */
+    return non_numeric && label_length != 0 && name[length - 1] != '-';
+}
+
 static int64_t pcc_tls_connection_create(pcc_tls_provider_v1_request *request)
 {
     pcc_openssl_context *context = request->primary;
     pcc_openssl_connection *connection;
     int fd;
-    if (context == NULL || context->ssl_ctx == NULL
+    if (context == NULL || context->ssl_ctx == NULL || context->is_client
         || request->secondary.integer < 0
         || request->secondary.integer > INT_MAX)
         return pcc_tls_error(request, PCC_TLS_ERR_PROVIDER_CONTRACT);
@@ -463,12 +647,65 @@ static int64_t pcc_tls_connection_create(pcc_tls_provider_v1_request *request)
     return pcc_tls_finish(request, PCC_TLS_OK, PCC_TLS_ERR_NONE);
 }
 
+static int64_t pcc_tls_client_connection_create(
+    pcc_tls_provider_v1_request *request)
+{
+#if !defined(__linux__)
+    return pcc_tls_error(request, PCC_TLS_ERR_CONFIGURATION);
+#else
+    pcc_openssl_context *context = request->primary;
+    pcc_openssl_connection *connection = NULL;
+    char *name = NULL;
+    int64_t error = PCC_TLS_ERR_CONFIGURATION;
+    if (context == NULL || context->ssl_ctx == NULL || !context->is_client
+        || request->secondary.integer < 0 || request->secondary.integer > INT_MAX
+        || request->flags != 0 || request->input0_len > PCC_TLS_SNI_MAX)
+        goto failed;
+    name = pcc_tls_copy_path(request->input0, request->input0_len);
+    if (name == NULL || !pcc_tls_dns_identity_valid(name, request->input0_len))
+        goto failed;
+    error = PCC_TLS_ERR_PROVIDER;
+    connection = calloc(1, sizeof(*connection));
+    if (connection == NULL)
+        goto failed;
+    connection->is_client = 1;
+    connection->ssl = SSL_new(context->ssl_ctx);
+    if (connection->ssl == NULL)
+        goto failed;
+    SSL_set_connect_state(connection->ssl);
+    SSL_set_verify(connection->ssl, SSL_VERIFY_PEER, NULL);
+    SSL_set_hostflags(connection->ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS
+                                      | X509_CHECK_FLAG_NEVER_CHECK_SUBJECT);
+    if (SSL_set1_host(connection->ssl, name) != 1
+        || SSL_set_tlsext_host_name(connection->ssl, name) != 1
+        || SSL_set_alpn_protos(connection->ssl,
+                               context->alpn, context->alpn_len) != 0)
+        goto failed;
+    error = PCC_TLS_ERR_IO;
+    if (!pcc_tls_attach_client_socket(connection, (int)request->secondary.integer))
+        goto failed;
+    free(name);
+    request->primary = connection;
+    return pcc_tls_finish(request, PCC_TLS_OK, PCC_TLS_ERR_NONE);
+failed:
+    if (connection != NULL) {
+        SSL_free(connection->ssl);
+        BIO_meth_free(connection->socket_method);
+        free(connection);
+    }
+    free(name);
+    request->primary = NULL;
+    return pcc_tls_error(request, error);
+#endif
+}
+
 static int64_t pcc_tls_connection_free(pcc_tls_provider_v1_request *request)
 {
     pcc_openssl_connection *connection = request->primary;
     if (connection == NULL)
         return pcc_tls_error(request, PCC_TLS_ERR_PROVIDER_CONTRACT);
     SSL_free(connection->ssl);
+    BIO_meth_free(connection->socket_method);
     free(connection);
     request->primary = NULL;
     return pcc_tls_finish(request, PCC_TLS_CLOSED, PCC_TLS_ERR_NONE);
@@ -516,10 +753,19 @@ static int64_t pcc_tls_handshake(pcc_tls_provider_v1_request *request)
     errno = 0;
     result = SSL_do_handshake(connection->ssl);
     if (result == 1) {
+        if (connection->is_client
+            && (SSL_get_verify_result(connection->ssl) != X509_V_OK
+                || SSL_get0_peer_certificate(connection->ssl) == NULL))
+            return pcc_tls_error(request, PCC_TLS_ERR_CERTIFICATE);
         connection->handshake_complete = 1;
         return pcc_tls_finish(request, PCC_TLS_OK, PCC_TLS_ERR_NONE);
     }
     ssl_error = SSL_get_error(connection->ssl, result);
+    /* Capture thread-local error classification before another OpenSSL call
+     * and, crucially, before returning to a potentially migrating vthread. */
+    if (connection->is_client && ssl_error == SSL_ERROR_SSL
+        && SSL_get_verify_result(connection->ssl) != X509_V_OK)
+        return pcc_tls_error(request, PCC_TLS_ERR_CERTIFICATE);
     if (ssl_error == SSL_ERROR_WANT_CLIENT_HELLO_CB
         && connection->client_hello_pending
         && !connection->client_hello_resumed) {
@@ -536,7 +782,8 @@ static int64_t pcc_tls_set_context(pcc_tls_provider_v1_request *request)
     pcc_openssl_connection *connection = request->primary;
     pcc_openssl_context *context = request->secondary.pointer;
     if (connection == NULL || connection->ssl == NULL || context == NULL
-        || context->ssl_ctx == NULL || !connection->client_hello_pending
+        || context->ssl_ctx == NULL || context->is_client || connection->is_client
+        || !connection->client_hello_pending
         || connection->client_hello_resumed)
         return pcc_tls_error(request, PCC_TLS_ERR_PROVIDER_CONTRACT);
     if (SSL_set_SSL_CTX(connection->ssl, context->ssl_ctx) == NULL)
@@ -679,6 +926,10 @@ PCC_TLS_EXPORT int64_t pcc_tls_provider_v1_call(
         return pcc_tls_write(request);
     case PCC_TLS_OP_CLOSE_NOTIFY:
         return pcc_tls_close_notify(request);
+    case PCC_TLS_OP_CLIENT_CONTEXT_CREATE:
+        return pcc_tls_client_context_create(request);
+    case PCC_TLS_OP_CLIENT_CONNECTION_CREATE:
+        return pcc_tls_client_connection_create(request);
     default:
         return pcc_tls_error(request, PCC_TLS_ERR_PROVIDER_CONTRACT);
     }

@@ -1,0 +1,32 @@
+{
+  "artifacts": {
+    "scheduler.o": {
+      "bytes": 299432,
+      "sha256": "67e4795eb7a74a7f36c6f370d262e99157a7b2b7f20718522df07b00624bdbea"
+    },
+    "scheduler.optimized.ll": {
+      "bytes": 621381,
+      "sha256": "b140eeab75ce0e9515eecc98cda8954492a4e3ec4170be10305b0c2cf2e64655"
+    },
+    "scheduler.raw.ll": {
+      "bytes": 766539,
+      "sha256": "f08bdfe47a6a37953de993db83d607047c8fec464ad47f9c2559fb934dbacfb3"
+    }
+  },
+  "compiler_source": "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/source-v9-annotation-astra",
+  "emission_status": "PASS",
+  "post_emission_audit": {
+    "blocked_functions": [
+      "py_virtual_thread_poll_io",
+      "_checked"
+    ],
+    "reason": "canonical input source lay outside frozen-v9 _PY_RUNTIME_DIR, bypassing runtime PORT_ABI_NATIVE_EXPORTS and implicit-root suppression; emitted strict.nolib.stub",
+    "required_retry": "coherent isolated frozen-source overlay path; exact scheduler candidate hash unchanged"
+  },
+  "runtime_ir_passes": "mem2reg,sroa,instsimplify,inline-defined,instsimplify,instcombine,dce",
+  "scope": "library IR plus owned Linux object emission only; no native execution",
+  "source": "/workspace/scratch/ce254c0a0910/pcc/pcc/runtime/py/py_virtual_thread_runtime.py",
+  "source_sha256": "245638f70a83ee149ec88a5a8d1dc9f9ab4ce60aa376f666c9bb3d6c9cd059a2",
+  "status": "EMITTED_WITH_STUBS_NOT_QUALIFIED",
+  "target": "x86_64-unknown-linux-gnu"
+}

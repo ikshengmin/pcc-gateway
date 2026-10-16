@@ -1,0 +1,5 @@
+{"gc": 0, "returncode": 0, "stdout": "PCC_MIXED_TIMER_IO_OK\n", "stderr": ""}
+{"gc": 1, "returncode": 0, "stdout": "PCC_MIXED_TIMER_IO_OK\n", "stderr": ""}
+{"gc": 2, "returncode": 0, "stdout": "PCC_MIXED_TIMER_IO_OK\n", "stderr": ""}
+{"gc": 3, "returncode": 0, "stdout": "PCC_MIXED_TIMER_IO_OK\n", "stderr": ""}
+{"gc": 4, "returncode": 0, "stdout": "PCC_MIXED_TIMER_IO_OK\n", "stderr": ""}

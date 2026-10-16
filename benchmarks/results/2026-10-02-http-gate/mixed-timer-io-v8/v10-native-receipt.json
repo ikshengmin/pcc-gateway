@@ -1,0 +1,40 @@
+{
+  "source": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed_timer_io_probe.py",
+  "source_sha256": "af06ff72933cdad16406032e0081dad021b523631d00f1a104c06615adf6d9c3",
+  "binary_sha256": "565584d2ad50a459a77f4a6b2c982d9dee8569d48c0b2a5268e08bb5d0646283",
+  "runtime_sha256": "ad7afd5aa1fadcd3e38e560681142a6cfad77f55c39d9453c588b866b2d87e3e",
+  "compiler_source": "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/source-v10-timer-astra",
+  "rows": [
+    {
+      "gc": 0,
+      "returncode": 0,
+      "stdout": "PCC_MIXED_TIMER_IO_OK\n",
+      "stderr": ""
+    },
+    {
+      "gc": 1,
+      "returncode": 0,
+      "stdout": "PCC_MIXED_TIMER_IO_OK\n",
+      "stderr": ""
+    },
+    {
+      "gc": 2,
+      "returncode": 0,
+      "stdout": "PCC_MIXED_TIMER_IO_OK\n",
+      "stderr": ""
+    },
+    {
+      "gc": 3,
+      "returncode": 0,
+      "stdout": "PCC_MIXED_TIMER_IO_OK\n",
+      "stderr": ""
+    },
+    {
+      "gc": 4,
+      "returncode": 0,
+      "stdout": "PCC_MIXED_TIMER_IO_OK\n",
+      "stderr": ""
+    }
+  ],
+  "status": "COMPLETE"
+}

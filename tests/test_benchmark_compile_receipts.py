@@ -44,3 +44,22 @@ def test_compile_receipt_survives_each_command_outcome(tmp_path, monkeypatch, ou
     if outcome != "success":
         assert saved["failure"]["implementation"] == "pcc1"
         assert "Status: FAILED" in report_path.with_suffix(".md").read_text()
+
+
+@pytest.mark.parametrize("library", ["libpython3.15.so.1.0", "libLLVM.so.21"])
+def test_linux_compile_receipt_rejects_external_python_or_llvm(tmp_path, monkeypatch, library):
+    compiler = tmp_path / "compiler"
+    compiler.write_bytes(b"test compiler")
+    output = tmp_path / "program"
+    output.write_bytes(b"test program")
+    report = {"started_utc": "test", "platform": "test", "cpu_model": "test",
+              "complete": False, "status": "RUNNING", "compilers": {}, "summary": []}
+    monkeypatch.setattr(compare.sys, "platform", "linux")
+    monkeypatch.setattr(compare, "run_command", lambda command, **k: subprocess.CompletedProcess(command, 0))
+    monkeypatch.setattr(compare.subprocess, "check_output", lambda *a, **k:
+        " 0x0000000000000001 (NEEDED) Shared library: [" + library + "]\n")
+    with pytest.raises(RuntimeError, match="unexpectedly links"):
+        compare.compile_arm("pcc1", str(compiler), tmp_path / "source.py", output,
+            tmp_path / "compile.log", env={}, report=report, report_path=tmp_path / "report.json")
+    assert report["compilers"]["pcc1"]["status"] == "FAILED"
+    assert not report["complete"]

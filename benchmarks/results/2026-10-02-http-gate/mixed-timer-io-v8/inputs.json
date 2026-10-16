@@ -1,0 +1,11 @@
+{
+  "compiler_source": "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/source-v8-export-errors-astra",
+  "compiler_source_sha256": "99e88bc525be54022e64fb9642b0eb9a40ebfe92cb0cff000508d1aba190a530",
+  "inputs": {
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-python/cpython-3.15.0rc1-linux-x86_64-gnu/bin/python3.15": "56045822d9c10027323c6f24ac5876901915b1c3ff8bfc6591d363c280246c82",
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/runtime-v8-export-errors-astra/libpy_runtime_pcc_py.a": "4928d2dc7a3bf4cc63e22a5e278f157db62d7be809f85b8e946e6a24a046a30a",
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/runtime-v8-export-errors-astra/libpy_runtime_pcc_py.a.provenance.json": "06d9f903eb59d654ab24347f2af14414515a6c6a29d9b05320274c081b02d3ca",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed_timer_io_probe.py": "af06ff72933cdad16406032e0081dad021b523631d00f1a104c06615adf6d9c3"
+  },
+  "scope": "Host-pcc0 self/no-libpython mixed timer+quiet-FD liveness probe; not pcc1 qualification or performance"
+}

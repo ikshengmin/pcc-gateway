@@ -1,0 +1,42 @@
+{
+  "artifact_sha256": "c5290f8caaafefa20f622ebc188f4fe60e20ab330437fd50fd0110ca744081eb",
+  "attribution": "Quiet-FD + ordinary sleep-timer liveness failure executed natively; missing timer deadline in poll_io is the source hypothesis, pending same-artifact control or corrected-runtime A/B.",
+  "cleanup": "Watchdog terminated and reaped the sole observed native child (returncode -15); execution tool session completed with watchdog status124. No runtime/background task was launched.",
+  "compile_elapsed_s": 3.554235821000475,
+  "compile_peak_tree_rss_bytes": 158408704,
+  "compile_returncode": 0,
+  "compile_status": "COMPLETE",
+  "compiler_source": "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/source-v8-export-errors-astra",
+  "compiler_source_sha256": "99e88bc525be54022e64fb9642b0eb9a40ebfe92cb0cff000508d1aba190a530",
+  "dynamic_dependencies": "readelf -d: There is no dynamic section in this file.",
+  "inputs": {
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-python/cpython-3.15.0rc1-linux-x86_64-gnu/bin/python3.15": "56045822d9c10027323c6f24ac5876901915b1c3ff8bfc6591d363c280246c82",
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/runtime-v8-export-errors-astra/libpy_runtime_pcc_py.a": "4928d2dc7a3bf4cc63e22a5e278f157db62d7be809f85b8e946e6a24a046a30a",
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-runs/runtime-v8-export-errors-astra/libpy_runtime_pcc_py.a.provenance.json": "06d9f903eb59d654ab24347f2af14414515a6c6a29d9b05320274c081b02d3ca",
+    "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/mixed_timer_io_probe.py": "af06ff72933cdad16406032e0081dad021b523631d00f1a104c06615adf6d9c3"
+  },
+  "outputs": {
+    "compile.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "compile.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "run.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "run.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "run_elapsed_s": 5.118218621999404,
+  "run_peak_tree_rss_bytes": 10461184,
+  "run_returncode": -15,
+  "run_status": "TIMEOUT",
+  "scope": "Host-pcc0 self/no-libpython mixed timer+quiet-FD liveness probe; not pcc1 qualification or performance",
+  "status": "NATIVE_LIVENESS_FAILURE"
+}

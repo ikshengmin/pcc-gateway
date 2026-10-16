@@ -266,6 +266,9 @@ def test_native_provider_header_and_adapter_freeze_one_capability_checked_abi() 
 
 
 def test_provider_digest_reader_is_pcc_owned_streaming_and_total_bounded() -> None:
+    # The pcc-Python port is the only implementation: core retired the C
+    # runtime (py_http.c included), so the bounded-read contract is pinned on
+    # the port alone.  The SHA-256 core lives in py_hash_runtime.py.
     pcc_runtime = (
         PCC_CORE / "pcc" / "runtime" / "py" / "py_hash_runtime.py"
     ).read_text(encoding="utf-8")

@@ -1,0 +1,174 @@
+{
+  "comparison_contract": {
+    "automatic_source_verdict": false,
+    "primary_compute_metric": "cpu_s",
+    "required_order": "adjacent_alternating_pairs",
+    "single_wall_verdict_allowed": false,
+    "wall_metric_role": "paired_end_to_end_observation"
+  },
+  "compiler": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/pcc2",
+  "compiler_sha256": "9429cde4eda07b63d1144f473e996fbd2d6d4301f56ba63d673f4e691e964484",
+  "linkage": {
+    "checked": true,
+    "links_libpython": false,
+    "links_llvm": false,
+    "stdout": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/pcc2:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1.0.0)\n"
+  },
+  "metric_scopes": {
+    "compile_sys_ms": "timed_command_plus_waited_children_cpu",
+    "compile_time_real_ms": "end_to_end_elapsed",
+    "compile_user_ms": "timed_command_plus_waited_children_cpu",
+    "compile_wall_ms": "end_to_end_elapsed",
+    "peak_tree_rss_bytes": "sampled_process_tree_sum",
+    "publish_barrier_ms": "end_to_end_elapsed",
+    "wall_ms": "end_to_end_elapsed_including_publish_barrier"
+  },
+  "process": {
+    "artifacts": {
+      "samples": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2-process.samples.tsv",
+      "stderr": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2-process.stderr",
+      "stdout": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2-process.stdout"
+    },
+    "command": [
+      "/bin/bash",
+      "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/source-snapshot/scripts/bootstrap.sh",
+      "--out-dir",
+      "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2",
+      "--backend",
+      "self",
+      "--from-stage",
+      "2",
+      "--stage",
+      "2",
+      "--reuse-stage1"
+    ],
+    "command_lookup_failure_count": 1,
+    "completed_at_utc": "2026-09-25T17:16:21.211742+00:00",
+    "cwd": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/source-snapshot",
+    "darwin_preflight_reserve_bytes": 0,
+    "elapsed_s": 395.84893212514,
+    "environment": {
+      "HOME": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/private-state/home",
+      "LANG": "en_US.UTF-8",
+      "PATH": "/Users/jiamo/.opam/5.3.0+trunk/bin:/Users/jiamo/.local/bin:/Users/jiamo/.bun/bin:/Users/jiamo/.antigravity/antigravity/bin:/Users/jiamo/.codeium/windsurf/bin:/Users/jiamo/.sdkman/candidates/maven/3.9.11/bin:/Users/jiamo/.sdkman/candidates/kotlin/2.0.20/bin:/Users/jiamo/.sdkman/candidates/java/17.0.8-oracle/bin:/Users/jiamo/.sdkman/candidates/gradle/8.1.1/bin:/Users/jiamo/.local/bin:/Users/jiamo/.elan/bin:/opt/homebrew/Cellar/ninja/1.11.1/bin:/Users/jiamo/.cargo/bin:/Users/jiamo/.pyenv/shims:/Users/jiamo/.pyenv/bin:/Users/jiamo/.goenv/bin:/Users/jiamo/.nvm/versions/node/v22.22.3/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Volumes/Preboot/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/private/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/private/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/private/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/usr/local/texlive/2024/bin/universal-darwin:/Applications/VMware Fusion.app/Contents/Public:/Users/jiamo/.cargo/bin:/Applications/iTerm.app/Contents/Resources/utilities:/Users/jiamo/.goenv/shims:/Users/jiamo/.lmstudio/bin:/Users/jiamo/.cabal/bin:/Users/jiamo/.ghcup/bin:/Users/jiamo/.claude/plugins/cache/anthropic-agent-skills/document-skills/34040c9c5685/bin:/Users/jiamo/.claude/plugins/cache/claude-plugins-official/slack/1.3.0/bin:/Users/jiamo/.claude/plugins/cache/claude-plugins-official/frontend-design/c447c3207a42/bin:/Users/jiamo/.claude/plugins/cache/claude-plugins-official/datadog/0.7.17/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/design~g3/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/cowork-plugin-management~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/typescript-lsp~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/swift-lsp~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/skill-creator~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/security-guidance~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/rust-analyzer-lsp~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/ruby-lsp~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/pyright-lsp~g2/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/pr-review-toolkit/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/plugin-dev/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/playwright/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/playground/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/php-lsp/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/lua-lsp/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/mcp-server-dev/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/learning-output-style/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/linear/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/kotlin-lsp/bin:/Users/jiamo/.claude/plugins/synced/4847a00c-4f30-41a5-a5c7-7c0a9d2b2904_712e06f1-4552-43b5-896a-af4b0d1caa53/jdtls-lsp/bin",
+      "PCC_BOOTSTRAP_EXTERNAL_MEMORY_GUARD": "1",
+      "PCC_BOOTSTRAP_MAX_TREE_RSS_BYTES": "8589934592",
+      "PCC_BOOTSTRAP_PROFILE_DIR": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/profile",
+      "PCC_BOOTSTRAP_PY_FRONTEND_JOBS": "auto",
+      "PCC_BOOTSTRAP_STAGE1_PY_FRONTEND_JOBS": "auto",
+      "PCC_DEBUG_IR_CALL": "0",
+      "PCC_DEBUG_IR_RENDER": "0",
+      "PCC_DIRECT_INDEXED_KERNEL_CAPTURE": "1",
+      "PCC_DIRECT_INDEXED_KERNEL_EMIT": "1",
+      "PCC_DIRECT_INDEXED_KERNEL_FUSE_USES": "1",
+      "PCC_DIRECT_INDEXED_KERNEL_RELEASE_FRONTEND": "1",
+      "PCC_DIRECT_INDEXED_KERNEL_REQUIRE_ZERO_FALLBACK": "1",
+      "PCC_GC_BACKEND": "0",
+      "PCC_HOST_PYTHON": "/Users/jiamo/.local/share/uv/python/cpython-3.15.0rc1-macos-aarch64-none/bin/python3.15",
+      "PCC_MACHO_LINK_JOBS": "8",
+      "PCC_PYTHON_IR_PASSES": "off",
+      "PCC_PYTHON_IR_PASS_JOBS": "1",
+      "PCC_PY_FRONTEND_IR_CACHE": "0",
+      "PCC_PY_FRONTEND_IR_CACHE_IDENTITY": "stage-ab-p1-candidate-frontend",
+      "PCC_PY_FRONTEND_JOBS": "auto",
+      "PCC_REPO_ROOT": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/source-snapshot",
+      "PCC_RUNTIME_ARCHIVE": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/runtime-bundle/libpy_runtime_pcc_py.a",
+      "PCC_RUNTIME_CC": "/usr/bin/false",
+      "PCC_RUNTIME_HIGH": "py",
+      "PCC_SELF_BACKEND_JOBS": "2",
+      "PCC_SELF_BACKEND_OBJECT_CACHE": "0",
+      "PCC_SELF_BACKEND_OBJECT_CACHE_IDENTITY": "stage-ab-p1-candidate-object",
+      "PCC_SELF_BACKEND_PUBLISH_SYNC": "1",
+      "PCC_SELF_LINK": "pcc",
+      "PCC_SOURCE_ROOT": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/source-snapshot",
+      "PCC_WITH_THREADS": "0",
+      "PYTHONHASHSEED": "0",
+      "PYTHONPYCACHEPREFIX": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/private-state/pycache",
+      "TMPDIR": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/private-state/tmp",
+      "XDG_CACHE_HOME": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/private-state/cache"
+    },
+    "interval_s": 0.25,
+    "known_process_count": 1064,
+    "largest_process_observed": {
+      "command": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/pcc1 --pcc-native-deferred-worker /private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/pcc2.pcc-codegen-plan",
+      "elapsed_s": 385.822142,
+      "manifest_paths": [],
+      "pid": 60270,
+      "ppid": 60257,
+      "rss_bytes": 4891639808
+    },
+    "max_tree_rss_bytes": 8589934592,
+    "peak_process_count": 14,
+    "peak_tree_rss_bytes": 6156500992,
+    "process_table_retry_count": 0,
+    "process_table_timeouts_s": [
+      1.0,
+      3.0
+    ],
+    "returncode": 0,
+    "sample_count": 1301,
+    "schema": "pcc.process_tree_sample.v1",
+    "started_at_utc": "2026-09-25T17:09:45.353078+00:00",
+    "status": "COMPLETE",
+    "terminal_processes": [
+      {
+        "command": "/bin/bash /private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s1/source-snapshot/scripts/bootstrap.sh --out-dir /private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2 --backend self --from-stage 2 --stage 2 --reuse-stage1",
+        "manifest_paths": [],
+        "pid": 60257,
+        "ppid": 60243,
+        "rss_bytes": 0
+      }
+    ],
+    "timeout_s": 1800.0
+  },
+  "resource_envelope": {
+    "cache_policy": {
+      "PCC_PY_FRONTEND_IR_CACHE": "0",
+      "PCC_SELF_BACKEND_OBJECT_CACHE": "0",
+      "private_pycache": "True"
+    },
+    "cpu_count": 12,
+    "frontend_jobs": 2,
+    "gc_backend": 0,
+    "macho_link_jobs": 8,
+    "max_tree_rss_bytes": 8589934592,
+    "observed_peak_process_count": 14,
+    "observed_peak_tree_rss_bytes": 6156500992,
+    "sampler_returncode": 0,
+    "sampler_status": "COMPLETE",
+    "self_backend_jobs": 2,
+    "termination_reason": "COMPLETE"
+  },
+  "result": {
+    "backend": "self",
+    "comparison_contract": {
+      "primary_compute_metrics": [
+        "compile_user_ms",
+        "compile_sys_ms"
+      ],
+      "required_comparison": "adjacent_alternating_same_environment_pairs",
+      "single_wall_verdict_allowed": false,
+      "wall_metric_role": "paired_end_to_end_observation"
+    },
+    "compile_sys_ms": 66759,
+    "compile_time_real_ms": 386866,
+    "compile_user_ms": 1770151,
+    "compile_wall_ms": 386877,
+    "metric_scopes": {
+      "compile_sys_ms": "timed_command_plus_waited_children_cpu",
+      "compile_time_real_ms": "end_to_end_elapsed",
+      "compile_user_ms": "timed_command_plus_waited_children_cpu",
+      "compile_wall_ms": "end_to_end_elapsed",
+      "publish_barrier_ms": "end_to_end_elapsed",
+      "wall_ms": "end_to_end_elapsed_including_publish_barrier"
+    },
+    "output": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/pcc2",
+    "publish_barrier_ms": 8695,
+    "publish_barrier_returncode": 0,
+    "returncode": 0,
+    "schema": "pcc.bootstrap_stage_result.v1",
+    "stage": 2,
+    "wall_ms": 395589
+  },
+  "result_path": "/private/tmp/claude-501/-Users-jiamo-my-pcc-gateway/3a7f74e3-a0d6-4ce6-8c6c-209e5c96345a/scratchpad/r59/s2/stage2/profile/stage2.result.json"
+}

@@ -42,7 +42,9 @@ enum pcc_tls_provider_v1_operation {
     PCC_TLS_OP_SELECTED_ALPN = 7,
     PCC_TLS_OP_READ = 8,
     PCC_TLS_OP_WRITE = 9,
-    PCC_TLS_OP_CLOSE_NOTIFY = 10
+    PCC_TLS_OP_CLOSE_NOTIFY = 10,
+    PCC_TLS_OP_CLIENT_CONTEXT_CREATE = 11,
+    PCC_TLS_OP_CLIENT_CONNECTION_CREATE = 12
 };
 
 enum pcc_tls_provider_v1_capability {
@@ -54,7 +56,9 @@ enum pcc_tls_provider_v1_capability {
     PCC_TLS_CAP_ALPN = UINT64_C(1) << 5,
     PCC_TLS_CAP_NONBLOCKING = UINT64_C(1) << 6,
     PCC_TLS_CAP_CLOSE_NOTIFY = UINT64_C(1) << 7,
-    PCC_TLS_CAP_CLIENT_CERTIFICATE = UINT64_C(1) << 8
+    PCC_TLS_CAP_CLIENT_CERTIFICATE = UINT64_C(1) << 8,
+    PCC_TLS_CAP_CLIENT = UINT64_C(1) << 9,
+    PCC_TLS_CAP_VERIFY_HOSTNAME = UINT64_C(1) << 10
 };
 
 /* Stable error values mirror pcc.gateway.tls TLS_ERR_* exactly. */
@@ -163,6 +167,19 @@ int64_t pcc_tls_provider_v1_call(
  *   primary <- context; secondary.integer <- nonblocking fd
  *   primary <- new provider connection on return
  *
+ * CLIENT_CONTEXT_CREATE (requires CLIENT and VERIFY_HOSTNAME capabilities):
+ *   input0 <- absolute PEM server trust-anchor path, or empty for system roots
+ *   input2 <- repeated decimal-length ':' ALPN tokens; flags must be zero
+ *   primary <- new client context. Peer chain verification is mandatory.
+ *   A missing/unreadable trust store is an error, never VERIFY_NONE.
+ *
+ * CLIENT_CONNECTION_CREATE:
+ *   primary <- client context; secondary.integer <- nonblocking fd
+ *   input0 <- nonempty canonical ASCII DNS hostname (not an IP literal)
+ *   primary <- new client connection with SNI and mandatory hostname checks.
+ *   Client HANDSHAKE never returns SELECT_SNI. Server/client handles cannot
+ *   be mixed. Existing server operations and the request layout are unchanged.
+ *
  * HANDSHAKE:
  *   primary <- connection
  *   return WANT_READ/WANT_WRITE while incomplete.  Return SELECT_SNI once and
@@ -180,6 +197,9 @@ int64_t pcc_tls_provider_v1_call(
  *   primary <- connection; READ uses output0/capacity and writes output0_len;
  *   WRITE uses input0/input0_len and writes output0_len.  Return WANT_READ or
  *   WANT_WRITE exactly as required by the TLS state machine.
+ *   After WRITE returns WANT_*, repeat with identical bytes and length. The
+ *   address may change (the provider enables ACCEPT_MOVING_WRITE_BUFFER).
+ *   The provider retains no caller buffer address beyond this call.
  *
  * CLOSE_NOTIFY:
  *   primary <- connection; return WANT_* until the alert is flushed/received,

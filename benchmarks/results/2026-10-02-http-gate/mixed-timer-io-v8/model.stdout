@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform linux -- Python 3.15.0rc1, pytest-9.0.3, pluggy-1.6.0 -- /workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/scratch/ce254c0a0910/pcc
+configfile: pyproject.toml
+plugins: xdist-3.8.0
+collecting ... collected 11 items
+
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[-1-None--1] PASSED [  9%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[-1-105-105] PASSED [ 18%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[0-None-100] PASSED [ 27%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[0-105-100] PASSED [ 36%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[20-105-105] PASSED [ 45%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[2-105-102] PASSED [ 54%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[20-95-95] PASSED [ 63%]
+tests/python/test_vthread_timer_io_deadline.py::test_io_wait_deadline_includes_sleep_timer[-1-95-95] PASSED [ 72%]
+tests/python/test_vthread_timer_io_deadline.py::test_earlier_timer_interrupts_before_commit_under_scheduler_lock PASSED [ 81%]
+tests/python/test_vthread_timer_io_deadline.py::test_timer_interrupt_error_leaves_sleep_caller_unchanged PASSED [ 90%]
+tests/python/test_vthread_timer_io_deadline.py::test_deadline_snapshot_and_wait_ownership_share_the_scheduler_lock PASSED [100%]
+
+============================== 11 passed in 1.76s ==============================

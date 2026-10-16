@@ -1,6 +1,6 @@
 """Prototype: the asyncio surface, backed by pcc's virtual threads.
 
-`pcc/py_stdlib/asyncio.py` is a reference implementation written in Python: a
+`pcc/stdlib/asyncio.py` is a reference implementation written in Python: a
 ready queue, `_Handle` objects, `Future` callback chains and a Python-level
 `Task._step`. Measured against CPython -- whose `Task` and `Future` are C
 types in `_asyncio` -- it loses by roughly 25x. Rebuilding CPython's design in

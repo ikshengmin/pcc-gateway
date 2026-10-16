@@ -11,9 +11,21 @@ Current-source native performance remains unqualified. A passing host CI or
 benchmark-reporting test does not establish pcc1 execution or a win over
 asyncio; see the [current qualification scope](../docs/ci.md).
 
+### Recorded six-arm comparison — 2026-09-26
+
+The most recent recorded comparison has
+[six arms and 180 validated runs](results/2026-09-26-side-slots-branch-layout/README.md):
+zero-wait C100 medians were 65,914 requests/s for host pcc, 66,779 for pcc1,
+30,225 for the pcc1 asyncio/vthread prototype, and 86,504 for CPython asyncio
+TaskGroup. Both native compilers used the same prebuilt pcc-Python runtime
+built from core `22a1a62c`; the native compiler was a Stage1 pcc1 of that
+source and compiled byte-identical executables. Its source and qualification
+limits are recorded alongside the results. Native execution used GC0. Its
+results do not describe current compiler performance.
+
 ### Recorded handler comparison — 2026-09-18
 
-The most recent committed [comparison](results/2026-09-18-selfhost-gates.md)
+The committed [comparison](results/2026-09-18-selfhost-gates.md)
 contains **90 validated runs**. Zero-wait C100 medians are 19,245.5 requests/s
 for host pcc, 18,998.1 for pcc1 and 86,584.7 for CPython asyncio TaskGroup.
 These are handler batches on Apple M2 Max, macOS 26.5.1 and CPython 3.15.0rc1,
@@ -132,6 +144,77 @@ latency validation before its samples reach a summary. Existing fields and raw
 samples are retained. Rendering an older receipt without `p99_ms` shows `n/a`
 for p99, without changing or extrapolating that receipt.
 
+### Process observation
+
+`compare.py` records each workload process's CPU time and peak RSS with
+`/usr/bin/time -lp` on macOS and with GNU time on Linux
+([`resource_usage.py`](resource_usage.py)), one hashed resource receipt per
+run. Linux artifact dependencies are inspected with `readelf -d`, without
+running `ldd`; macOS uses `otool -L`.
+
+The live HTTP runner `http_compare.py` instead uses the small
+[`process_observer.c`](process_observer.c) wait4 supervisor on both platforms.
+The installed host `cc` builds **only this measurement tool**, with a
+30-second limit. Its source, compiler, binary, command and build log are
+receipted separately. It never compiles or links a pcc compiler, runtime, or
+application and is not a native execution dependency. The exact workload
+child's `ru_maxrss` is converted from Linux KiB to bytes; macOS already
+supplies bytes. CPU user/system seconds and context switches come from that
+same child's `wait4` result. These are lifetime observations, including
+startup, warmups, retained latency samples, output formatting, and any waited
+descendants per OS semantics, **not synchronized process-tree memory**. The
+outer watchdog owns that separate safety measurement. A Python supervisor is
+deliberately avoided: its inherited pre-exec RSS can falsely impose a
+Python-sized floor on a small native process. Hardware instructions/cycles
+are explicitly unavailable in wait4, rather than silently recorded as zero.
+
+`--include-asyncio-gather` adds the CPython gather baseline without building the
+diagnostic asyncio/vthread prototype. It does not change any arm's workload.
+
+### Bounded current-artifact comparison
+
+Do not run against an old installed name while a new compiler is being
+qualified. Obtain the current immutable host entry, pcc1 binary/build receipt,
+source tree, and matching application runtime from that qualification first.
+On a quiet machine, after its shared performance slot is released, the
+following is a bounded three-arm comparison (four with CPython gather):
+
+```bash
+# Set these to the qualified artifacts, not an older installed compiler.
+: "${PCC_PYTHON:?CPython 3.15.0rc1 executable}"
+: "${PCC_HOST:?host entry running python -m pcc with automatic pcc1 disabled}"
+: "${PCC_NATIVE:?current pcc1 executable}"
+: "${PCC_SOURCE:?frozen compiler source}"
+: "${PCC_RUNTIME:?matching application runtime archive}"
+: "${PCC_RECEIPT:?matching pcc1 build receipt}"
+OUT=benchmarks/results/current-linux-comparison  # Choose a new name each time.
+mkdir -p "$(dirname "$OUT")"
+env -u LC_ALL UV_NO_SYNC=1 PCC_NO_AUTO_PCC1=1 "$PCC_PYTHON" \
+  ../pcc/scripts/run_process_tree_sample.py \
+  --result "$OUT.watchdog.json" --samples "$OUT.samples" \
+  --stdout "$OUT.stdout" --stderr "$OUT.stderr" \
+  --timeout 900 --max-tree-rss-bytes 2147483648 --no-performance-lock -- \
+  "$PCC_PYTHON" benchmarks/compare.py \
+  --pcc "$PCC_HOST" --pcc1 "$PCC_NATIVE" \
+  --compiler-source "$PCC_SOURCE" --runtime-archive "$PCC_RUNTIME" \
+  --pcc1-binary "$PCC_NATIVE" --pcc1-receipt "$PCC_RECEIPT" \
+  --concurrency 1,10,100 --delays 0,100 --rounds 5 \
+  --zero-delay-requests 20000 --repeats 5 --include-asyncio-gather \
+  --output "$OUT.json"
+```
+
+The runner holds the core performance lock; each native application compile
+is limited to 300 seconds, each measured arm to 60 seconds. The outer watchdog
+adds a 900-second / 2-GiB process-tree cap and cleans up on interruption.
+Start with a separately named smoke using `--concurrency 1,10 --delays 0,10
+--rounds 2 --zero-delay-requests 100 --repeats 1` before the full matrix.
+Keep the full measured sources and retained latency arrays identical between
+arms. Judge the C100 zero-wait target against both same-run asyncio baselines;
+report other widths/waits, paired repeat variability, CPU and RSS separately.
+Passing these handler batches does not qualify live HTTP, HTTPS, all five GC
+backends, or an LLVM-free compiler fixed point. Historical LLVM-assisted
+reference results remain historical and must not substitute for this run.
+
 ## Runtime and compiler attribution
 
 [runtime_ab.py](runtime_ab.py) holds the workload constant while comparing
@@ -214,3 +297,80 @@ checked lane before main and requires an observed zero counter, including the
 local HTTP probe; missing observation is not zero. See
 [qualification](results/2026-09-09-known-reference-qualification.json) and
 [waiter audit](results/2026-09-09-waiter-initialization-audit.json).
+
+## Fresh-request live HTTP comparison
+
+`benchmark_http_native.py` serves the production `GatewayServer` over loopback
+HTTP/1.1. `benchmark_http_asyncio.py` is an explicit CPython TaskGroup reference
+adapter using the same request codec, router, response encoder, response types
+and child data transformations. Their transport/lifecycle implementations
+necessarily differ; the reference adapter is not a second production framework.
+Neither arm uses precomputed JSON. Every client request has a unique ID that
+must occur in both child results and the final JSON response. Both children
+must start, and their `finally` cleanups must execute exactly once before a
+response is valid.
+
+This is a separate workload from `compare.py`'s handler batches. Each of C
+persistent clients sends another request immediately after validating the
+previous one. The common client retains per-request latency samples. Throughput
+and latency exclude startup, two warmup requests per connection and functional
+gates; exact-child server CPU/RSS includes those phases and shutdown, and excludes
+the client. Do not interpret its RSS as a handler-benchmark memory comparison.
+The HTTP adapter has no TLS; HTTPS remains a separate named-provider gate.
+
+The native server requires a provenance-verified **threaded** runtime even with
+one carrier: production server startup uses `carrier_pool_start`. An archive
+with `threads=false` cannot substitute. Build and qualification remain core
+responsibilities; this harness never provisions a runtime automatically.
+
+After the central performance slot is released, compile with immutable current
+artifacts (run under the core process-tree watchdog: 330 seconds / 2 GiB;
+`http_compile.py` acquires the performance lock itself):
+
+```bash
+# Host-pcc native execution is a diagnostic, never a pcc1 qualification.
+"$PCC_PYTHON" benchmarks/http_compile.py \
+  --host-python "$PCC_PYTHON" --compiler-source "$PCC_SOURCE" \
+  --runtime-archive "$PCC_THREADED_RUNTIME" \
+  --output-dir benchmarks/build/http-current-host
+
+# For the native compiler arm, replace --host-python with:
+# --pcc1 "$PCC_NATIVE" --pcc1-receipt "$PCC_RECEIPT"
+```
+
+The helper reuses `compare.py`'s 300-second self/no-libpython compile gate,
+rejects libpython/libLLVM linkage and writes `compile.json` binding the
+executable, compiler, application sources, frozen core source, threaded runtime,
+runtime provenance and effective environment. Native pcc1 additionally requires
+its matching build receipt; this records that receipt without promoting a
+Stage1 claim to a fixed-point qualification.
+
+Start with a separately named functional/small-load smoke, under a 120-second /
+2-GiB process-tree watchdog with `--no-performance-lock` because this runner owns
+the lock. The runner requires CPython **3.15.0rc1**:
+
+```bash
+"$PCC_PYTHON" benchmarks/http_compare.py \
+  --native benchmarks/build/http-current-host/http-native --native-label host-pcc \
+  --compile-receipt benchmarks/build/http-current-host/compile.json \
+  --compiler-source "$PCC_SOURCE" --runtime-archive "$PCC_THREADED_RUNTIME" \
+  --concurrency 1,10 --delays 0,10 --rounds 3 --repeats 1 \
+  --output benchmarks/results/http-current-smoke.json
+```
+
+Each arm independently passes fragmented requests, ambiguous framing rejection,
+404 routing, and a failing child whose one-second sibling must be cancelled and
+drained before 750 ms. A client disconnect is followed by terminal cleanup;
+this proves eventual closure, not immediate disconnect cancellation. SIGTERM
+must close connections, request owners, buffers, generation references and the
+native carrier pool. Exact server request counts must match the client. Any
+failure stops the run and keeps incomplete status and raw streams.
+
+A full same-run comparison uses C=1/10/100, waits=0/10 ms, at least 100 rounds
+and five alternating repeats. Match the native label (`host-pcc` or `pcc1`) to
+its compile receipt. Store all paired QPS ratios, latency distributions,
+process CPU/RSS, source/artifact identities and raw outputs. Hardware
+instructions/cycles remain explicitly unavailable with this wait4 observer.
+Complete successful measurements, a production no-fallback native compiler and
+appropriate GC gates are prerequisites to a performance claim; preparing or
+passing the CPython oracle does not satisfy them.

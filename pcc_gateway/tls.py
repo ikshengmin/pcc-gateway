@@ -47,11 +47,13 @@ from pcc.unsafe import (
     dynamic_library_open,
     dynamic_library_symbol,
     load_i64,
+    load_i8,
     load_ptr,
     ptr_add,
     ptr_to_int,
     stack_alloc,
     store_i64,
+    store_i8,
     store_ptr,
 )
 from .config import TLS_PROVIDER_DEFAULT_MAX_BYTES, _valid_sha256_hex
@@ -110,6 +112,8 @@ PCC_TLS_OP_SELECTED_ALPN = 7
 PCC_TLS_OP_READ = 8
 PCC_TLS_OP_WRITE = 9
 PCC_TLS_OP_CLOSE_NOTIFY = 10
+PCC_TLS_OP_CLIENT_CONTEXT_CREATE = 11
+PCC_TLS_OP_CLIENT_CONNECTION_CREATE = 12
 
 PCC_TLS_CAP_TLS12 = 1 << 0
 PCC_TLS_CAP_TLS13 = 1 << 1
@@ -120,6 +124,8 @@ PCC_TLS_CAP_ALPN = 1 << 5
 PCC_TLS_CAP_NONBLOCKING = 1 << 6
 PCC_TLS_CAP_CLOSE_NOTIFY = 1 << 7
 PCC_TLS_CAP_CLIENT_CERTIFICATE = 1 << 8
+PCC_TLS_CAP_CLIENT = 1 << 9
+PCC_TLS_CAP_VERIFY_HOSTNAME = 1 << 10
 PCC_TLS_REQUIRED_CAPABILITIES = (
     PCC_TLS_CAP_TLS12
     | PCC_TLS_CAP_TLS13
@@ -130,6 +136,10 @@ PCC_TLS_REQUIRED_CAPABILITIES = (
     | PCC_TLS_CAP_NONBLOCKING
     | PCC_TLS_CAP_CLOSE_NOTIFY
 )
+PCC_TLS_CLIENT_REQUIRED_CAPABILITIES = (
+    PCC_TLS_REQUIRED_CAPABILITIES | PCC_TLS_CAP_CLIENT | PCC_TLS_CAP_VERIFY_HOSTNAME
+)
+TLS_IO_CHUNK_BYTES = 65536
 
 # Fixed request layout, in 64-bit words.  Pointer-width is part of the v1 ABI;
 # current pcc production targets are AArch64 Darwin and x86_64 Linux.
@@ -162,6 +172,25 @@ _py_str_byte_len = extern("py_str_byte_len", (c_ptr,), c_int64)
 
 class TlsProviderError(RuntimeError):
     """Configuration/ownership failure outside the nonblocking data path."""
+
+
+def _copy_bytes_to_storage(storage, data: bytes, length: int) -> None:
+    # Only managed indexing happens here. No managed interior address is
+    # computed or hidden in a request across a safepoint, lock or foreign call.
+    index = 0
+    while index < length:
+        store_i8(storage, index, data[index])
+        index += 1
+
+
+def _copy_text_to_storage(storage, value: str, capacity: int) -> int:
+    data = value.encode("utf-8")
+    length = len(data)
+    if length >= capacity:
+        raise TlsProviderError("native TLS text input is too long")
+    _copy_bytes_to_storage(storage, data, length)
+    store_i8(storage, length, 0)
+    return length
 
 
 def tls_error_name(error_code: int) -> str:
@@ -339,6 +368,32 @@ class TlsCertificate:
         self.certificate = certificate
         self.private_key = private_key
         self.server_names = tuple(normalized_names)
+
+
+class TlsClientConfig:
+    """Verified outbound DNS identity, trust store and ALPN policy.
+
+    Verification cannot be disabled. Empty ca_file selects OpenSSL's system
+    roots. This first capability requires an ASCII DNS name; IP identities and
+    IDNA conversion are unavailable. A separate numeric connect address never
+    replaces the configured authenticated identity.
+    """
+
+    def __init__(self, server_name: str, ca_file: str = "", alpn=("http/1.1",)):
+        name = _normalize_sni_name(server_name)
+        if all(character in "0123456789." for character in name):
+            raise ValueError("TLS client IP identities are not supported")
+        if not isinstance(ca_file, str) or "\x00" in ca_file:
+            raise ValueError("TLS client CA path must be a NUL-free string")
+        if ca_file and not ca_file.startswith("/"):
+            raise ValueError("TLS client CA path must be absolute")
+        if len(ca_file.encode("utf-8")) > _TLS_MAX_PROVIDER_PATH:
+            raise ValueError("TLS client CA path is too long")
+        self.server_name = name
+        self.ca_file = ca_file
+        self.alpn = _validate_alpn(tuple(alpn))
+        if not self.alpn:
+            raise ValueError("TLS client requires at least one ALPN protocol")
 
 
 class TlsConfig:
@@ -641,10 +696,11 @@ class TlsProviderRegistry:
 
 
 class _PccNativeTlsContext:
-    def __init__(self, handle, certificate_id: str) -> None:
+    def __init__(self, handle, certificate_id: str, is_client: bool = False) -> None:
         self.handle = handle
         self.certificate_id = certificate_id
         self.released = False
+        self.is_client = is_client
 
 
 class _PccNativeTlsSession:
@@ -858,8 +914,8 @@ class PccNativeTlsProvider:
             self._state_lock.release()
         self._close_library(library)
 
-    def _request(self, operation: int):
-        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+    def _request(self, request, operation: int) -> None:
+        # Storage belongs to the operation caller; never return a helper alloca.
         offset = 0
         while offset < _PCC_TLS_REQUEST_BYTES:
             store_i64(request, offset, 0)
@@ -867,7 +923,6 @@ class PccNativeTlsProvider:
         store_i64(request, _PCC_TLS_REQ_SIZE, _PCC_TLS_REQUEST_BYTES)
         store_i64(request, _PCC_TLS_REQ_ABI, PCC_NATIVE_TLS_ABI_VERSION)
         store_i64(request, _PCC_TLS_REQ_OPERATION, operation)
-        return request
 
     def _invoke(self, operation: int, request) -> int:
         entrypoint = self._begin_call()
@@ -979,7 +1034,8 @@ class PccNativeTlsProvider:
                 if entrypoint is None or ptr_to_int(entrypoint) == 0:
                     raise TlsProviderError("native TLS provider entrypoint is missing")
 
-                request = self._request(PCC_TLS_OP_PROBE)
+                request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+                self._request(request, PCC_TLS_OP_PROBE)
                 identity_storage = stack_alloc(65)
                 store_ptr(request, _PCC_TLS_REQ_OUTPUT0, identity_storage)
                 store_i64(request, _PCC_TLS_REQ_OUTPUT0_CAP, 64)
@@ -1055,39 +1111,30 @@ class PccNativeTlsProvider:
             )
         if config.client_ca and not config.client_ca.startswith("/"):
             raise TlsProviderError("native TLS client CA path must be absolute")
-        certificate_length = _py_str_byte_len(certificate.certificate)
-        private_key_length = _py_str_byte_len(certificate.private_key)
-        client_ca_length = _py_str_byte_len(config.client_ca)
-        if (
-            certificate_length > _TLS_MAX_PROVIDER_PATH
-            or private_key_length > _TLS_MAX_PROVIDER_PATH
-            or client_ca_length > _TLS_MAX_PROVIDER_PATH
-        ):
-            raise TlsProviderError("native TLS certificate path is too long")
-        alpn = self._alpn_wire(config.alpn)
-        request = self._request(PCC_TLS_OP_CONTEXT_CREATE)
-        certificate_path = _py_str_utf8(certificate.certificate)
-        private_key_path = _py_str_utf8(certificate.private_key)
-        alpn_value = _py_str_utf8(alpn)
+        # All request pointees are operation-local raw storage. Locks in
+        # _reserve_resource/_invoke may park; no managed address crosses them.
+        certificate_path = stack_alloc(4097)
+        private_key_path = stack_alloc(4097)
+        client_ca_value = stack_alloc(4097)
+        alpn_value = stack_alloc(8193)
+        certificate_length = _copy_text_to_storage(
+            certificate_path, certificate.certificate, 4097)
+        private_key_length = _copy_text_to_storage(
+            private_key_path, certificate.private_key, 4097)
+        client_ca_length = _copy_text_to_storage(
+            client_ca_value, config.client_ca, 4097)
+        alpn_length = _copy_text_to_storage(
+            alpn_value, self._alpn_wire(config.alpn), 8193)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._request(request, PCC_TLS_OP_CONTEXT_CREATE)
         store_ptr(request, _PCC_TLS_REQ_INPUT0, certificate_path)
-        store_i64(
-            request,
-            _PCC_TLS_REQ_INPUT0_LEN,
-            certificate_length,
-        )
+        store_i64(request, _PCC_TLS_REQ_INPUT0_LEN, certificate_length)
         store_ptr(request, _PCC_TLS_REQ_INPUT1, private_key_path)
-        store_i64(
-            request,
-            _PCC_TLS_REQ_INPUT1_LEN,
-            private_key_length,
-        )
+        store_i64(request, _PCC_TLS_REQ_INPUT1_LEN, private_key_length)
         store_ptr(request, _PCC_TLS_REQ_INPUT2, alpn_value)
-        store_i64(request, _PCC_TLS_REQ_INPUT2_LEN, _py_str_byte_len(alpn))
-        client_ca_value = _py_str_utf8(config.client_ca)
+        store_i64(request, _PCC_TLS_REQ_INPUT2_LEN, alpn_length)
         store_ptr(request, _PCC_TLS_REQ_INPUT3, client_ca_value)
-        store_i64(
-            request, _PCC_TLS_REQ_INPUT3_LEN, client_ca_length
-        )
+        store_i64(request, _PCC_TLS_REQ_INPUT3_LEN, client_ca_length)
         store_i64(
             request,
             _PCC_TLS_REQ_FLAGS,
@@ -1109,11 +1156,55 @@ class PccNativeTlsProvider:
         self._publish_resource("context")
         return _PccNativeTlsContext(handle, certificate.identifier)
 
+    def create_client_context(self, config: TlsClientConfig):
+        self.activate()
+        required = PCC_TLS_CLIENT_REQUIRED_CAPABILITIES
+        if self.capabilities & required != required:
+            raise TlsProviderError("native TLS provider lacks verified client capability")
+        ca_storage = stack_alloc(4097)
+        alpn_storage = stack_alloc(8193)
+        ca_length = _copy_text_to_storage(ca_storage, config.ca_file, 4097)
+        alpn_length = _copy_text_to_storage(
+            alpn_storage, self._alpn_wire(config.alpn), 8193)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._request(request, PCC_TLS_OP_CLIENT_CONTEXT_CREATE)
+        store_ptr(request, _PCC_TLS_REQ_INPUT0, ca_storage)
+        store_i64(request, _PCC_TLS_REQ_INPUT0_LEN, ca_length)
+        store_ptr(request, _PCC_TLS_REQ_INPUT2, alpn_storage)
+        store_i64(request, _PCC_TLS_REQ_INPUT2_LEN, alpn_length)
+        self._reserve_resource()
+        try:
+            status = self._invoke(PCC_TLS_OP_CLIENT_CONTEXT_CREATE, request)
+            if status != TLS_OK:
+                raise TlsProviderError("native TLS client trust store/context failed")
+            handle = load_ptr(request, _PCC_TLS_REQ_PRIMARY)
+            if handle is None or ptr_to_int(handle) == 0:
+                raise TlsProviderError("native TLS provider returned a null context")
+        except Exception:
+            self._cancel_resource()
+            raise
+        self._publish_resource("context")
+        return _PccNativeTlsContext(handle, "", True)
+
     def new_connection(self, context, fd):
+        return self._new_connection(context, fd, "")
+
+    def new_client_connection(self, context, fd, server_name: str):
+        name = _normalize_sni_name(server_name)
+        return self._new_connection(context, fd, name)
+
+    def _new_connection(self, context, fd, server_name: str):
+        name_storage = stack_alloc(254)
+        name_length = _copy_text_to_storage(name_storage, server_name, 254)
+        operation = PCC_TLS_OP_CONNECTION_CREATE
+        if server_name:
+            operation = PCC_TLS_OP_CLIENT_CONNECTION_CREATE
         self._state_lock.acquire()
         try:
             if not isinstance(context, _PccNativeTlsContext) or context.released:
                 raise TlsProviderError("native TLS context is released")
+            if context.is_client != bool(server_name):
+                raise TlsProviderError("native TLS client/server context mismatch")
             if self._close_requested or self._closed:
                 raise TlsProviderError("native TLS provider is closing")
             context_handle = context.handle
@@ -1121,10 +1212,13 @@ class PccNativeTlsProvider:
         finally:
             self._state_lock.release()
         try:
-            request = self._request(PCC_TLS_OP_CONNECTION_CREATE)
+            request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+            self._request(request, operation)
             store_ptr(request, _PCC_TLS_REQ_PRIMARY, context_handle)
             store_i64(request, _PCC_TLS_REQ_SECONDARY, fd)
-            status = self._invoke(PCC_TLS_OP_CONNECTION_CREATE, request)
+            store_ptr(request, _PCC_TLS_REQ_INPUT0, name_storage)
+            store_i64(request, _PCC_TLS_REQ_INPUT0_LEN, name_length)
+            status = self._invoke(operation, request)
             if status != TLS_OK:
                 raise TlsProviderError("native TLS connection creation failed")
             handle = load_ptr(request, _PCC_TLS_REQ_PRIMARY)
@@ -1139,7 +1233,8 @@ class PccNativeTlsProvider:
         return _PccNativeTlsSession(handle)
 
     def handshake(self, session):
-        request = self._session_request(PCC_TLS_OP_HANDSHAKE, session)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._session_request(request, PCC_TLS_OP_HANDSHAKE, session)
         name_storage = stack_alloc(_TLS_MAX_SNI_NAME + 1)
         store_ptr(request, _PCC_TLS_REQ_OUTPUT0, name_storage)
         store_i64(request, _PCC_TLS_REQ_OUTPUT0_CAP, _TLS_MAX_SNI_NAME)
@@ -1151,23 +1246,24 @@ class PccNativeTlsProvider:
             )
         return self._result(status, request, server_name=server_name)
 
-    def _session_request(self, operation: int, session):
+    def _session_request(self, request, operation: int, session) -> None:
         if not isinstance(session, _PccNativeTlsSession) or session.released:
             raise TlsProviderError("native TLS connection is released")
-        request = self._request(operation)
+        self._request(request, operation)
         store_ptr(request, _PCC_TLS_REQ_PRIMARY, session.handle)
-        return request
 
     def set_server_context(self, session, context):
         if not isinstance(context, _PccNativeTlsContext) or context.released:
             return _tls_error(TLS_ERR_PROVIDER, "native TLS context is released")
-        request = self._session_request(PCC_TLS_OP_SET_CONTEXT, session)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._session_request(request, PCC_TLS_OP_SET_CONTEXT, session)
         store_ptr(request, _PCC_TLS_REQ_SECONDARY, context.handle)
         status = self._invoke(PCC_TLS_OP_SET_CONTEXT, request)
         return self._result(status, request)
 
     def selected_alpn(self, session):
-        request = self._session_request(PCC_TLS_OP_SELECTED_ALPN, session)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._session_request(request, PCC_TLS_OP_SELECTED_ALPN, session)
         storage = stack_alloc(256)
         store_ptr(request, _PCC_TLS_REQ_OUTPUT0, storage)
         store_i64(request, _PCC_TLS_REQ_OUTPUT0_CAP, 255)
@@ -1177,35 +1273,46 @@ class PccNativeTlsProvider:
         return self._read_text(request, storage, 256)
 
     def read(self, session, output, limit):
-        if not isinstance(output, bytearray):
-            return _tls_error(TLS_ERR_PROVIDER_CONTRACT, "TLS read needs bytearray")
-        request = self._session_request(PCC_TLS_OP_READ, session)
-        store_ptr(
-            request,
-            _PCC_TLS_REQ_OUTPUT0,
-            ptr_add(output, abi_constant("object.bytearray.data_offset")),
-        )
-        store_i64(request, _PCC_TLS_REQ_OUTPUT0_CAP, limit)
+        if not isinstance(output, bytearray) or limit <= 0 or limit > len(output):
+            return _tls_error(TLS_ERR_PROVIDER_CONTRACT, "invalid TLS read buffer")
+        count_limit = min(limit, TLS_IO_CHUNK_BYTES)
+        storage = stack_alloc(65536)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._session_request(request, PCC_TLS_OP_READ, session)
+        store_ptr(request, _PCC_TLS_REQ_OUTPUT0, storage)
+        store_i64(request, _PCC_TLS_REQ_OUTPUT0_CAP, count_limit)
         status = self._invoke(PCC_TLS_OP_READ, request)
         count = load_i64(request, _PCC_TLS_REQ_OUTPUT0_LEN)
+        if status == TLS_OK:
+            if count <= 0 or count > count_limit:
+                return _tls_error(TLS_ERR_PROVIDER_CONTRACT, "invalid TLS read count")
+            # Reload the managed owner through normal indexed operations;
+            # never copy to a pre-lock/pre-call bytearray interior address.
+            index = 0
+            while index < count:
+                output[index] = load_i8(storage, index) & 255
+                index += 1
         return self._result(status, request, count=count if status == TLS_OK else 0)
 
     def write(self, session, data, length):
-        if not isinstance(data, bytes):
-            return _tls_error(TLS_ERR_PROVIDER_CONTRACT, "TLS write needs bytes")
-        request = self._session_request(PCC_TLS_OP_WRITE, session)
-        store_ptr(
-            request,
-            _PCC_TLS_REQ_INPUT0,
-            ptr_add(data, abi_constant("object.bytes.data_offset")),
-        )
-        store_i64(request, _PCC_TLS_REQ_INPUT0_LEN, length)
+        if not isinstance(data, bytes) or length <= 0 or length > len(data):
+            return _tls_error(TLS_ERR_PROVIDER_CONTRACT, "invalid TLS write buffer")
+        count_limit = min(length, TLS_IO_CHUNK_BYTES)
+        storage = stack_alloc(65536)
+        _copy_bytes_to_storage(storage, data, count_limit)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._session_request(request, PCC_TLS_OP_WRITE, session)
+        store_ptr(request, _PCC_TLS_REQ_INPUT0, storage)
+        store_i64(request, _PCC_TLS_REQ_INPUT0_LEN, count_limit)
         status = self._invoke(PCC_TLS_OP_WRITE, request)
         count = load_i64(request, _PCC_TLS_REQ_OUTPUT0_LEN)
+        if status == TLS_OK and (count <= 0 or count > count_limit):
+            return _tls_error(TLS_ERR_PROVIDER_CONTRACT, "invalid TLS write count")
         return self._result(status, request, count=count if status == TLS_OK else 0)
 
     def close_notify(self, session):
-        request = self._session_request(PCC_TLS_OP_CLOSE_NOTIFY, session)
+        request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+        self._session_request(request, PCC_TLS_OP_CLOSE_NOTIFY, session)
         status = self._invoke(PCC_TLS_OP_CLOSE_NOTIFY, request)
         return self._result(status, request)
 
@@ -1220,7 +1327,8 @@ class PccNativeTlsProvider:
         finally:
             self._state_lock.release()
         try:
-            request = self._request(PCC_TLS_OP_CONNECTION_FREE)
+            request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+            self._request(request, PCC_TLS_OP_CONNECTION_FREE)
             store_ptr(request, _PCC_TLS_REQ_PRIMARY, handle)
             status = self._invoke(PCC_TLS_OP_CONNECTION_FREE, request)
             if status not in (TLS_OK, TLS_CLOSED):
@@ -1239,7 +1347,8 @@ class PccNativeTlsProvider:
         finally:
             self._state_lock.release()
         try:
-            request = self._request(PCC_TLS_OP_CONTEXT_FREE)
+            request = stack_alloc(_PCC_TLS_REQUEST_BYTES)
+            self._request(request, PCC_TLS_OP_CONTEXT_FREE)
             store_ptr(request, _PCC_TLS_REQ_PRIMARY, handle)
             status = self._invoke(PCC_TLS_OP_CONTEXT_FREE, request)
             if status not in (TLS_OK, TLS_CLOSED):
@@ -1297,22 +1406,31 @@ class TlsGeneration:
     def __init__(self, generation_id: int, provider, config: TlsConfig) -> None:
         if generation_id <= 0:
             raise ValueError("TLS generation id must be positive")
-        if not isinstance(config, TlsConfig):
-            raise TypeError("TLS generation config must be TlsConfig")
+        if not isinstance(config, (TlsConfig, TlsClientConfig)):
+            raise TypeError("TLS generation config must be TlsConfig or TlsClientConfig")
         self._lock: Lock = Lock()
         self.generation_id = generation_id
         self.provider = provider
         self.provider_name = provider.name
         self.provider_info = TlsProviderInfo(provider)
         self.config = config
+        self.is_client = isinstance(config, TlsClientConfig)
         self._references = 1
         self._retired = False
         self._destroyed = False
         self._contexts = []
         self._context_by_identifier = {}
         self._context = None
-        certificates = (config.default_certificate,) + config.sni_certificates
+        certificates = ()
+        if not self.is_client:
+            certificates = (config.default_certificate,) + config.sni_certificates
         try:
+            if self.is_client:
+                context = provider.create_client_context(config)
+                if context is None:
+                    raise TlsProviderError("TLS provider failed to create client context")
+                self._contexts.append(context)
+                self._context = context
             for certificate in certificates:
                 context = provider.create_server_context(config, certificate)
                 if context is None:
@@ -1339,9 +1457,10 @@ class TlsGeneration:
             if isinstance(error, TlsProviderError):
                 raise
             raise TlsProviderError("TLS provider context creation failed") from error
-        self._context = self._context_by_identifier[
-            config.default_certificate.identifier
-        ]
+        if not self.is_client:
+            self._context = self._context_by_identifier[
+                config.default_certificate.identifier
+            ]
 
     @property
     def references(self) -> int:
@@ -1460,6 +1579,34 @@ class TlsGeneration:
             return context, certificate.identifier
         finally:
             self._lock.release()
+
+
+class TlsClientContext(TlsGeneration):
+    """Reusable verified client context with the same generation lease owner.
+
+    close() prevents new channels and defers native context release until the
+    final existing channel closes. The provider itself remains caller-owned.
+    """
+
+    def __init__(self, provider, config: TlsClientConfig) -> None:
+        if not isinstance(config, TlsClientConfig):
+            raise TypeError("TLS client context requires TlsClientConfig")
+        super().__init__(1, provider, config)
+
+    def new_channel(self, fd: int):
+        if fd < 0:
+            raise ValueError("TLS channel requires a nonnegative socket fd")
+        self._lock.acquire()
+        try:
+            if self._retired or self._destroyed:
+                raise TlsProviderError("TLS client context is closed")
+            self._references += 1
+        finally:
+            self._lock.release()
+        return TlsChannel(self, fd, True)
+
+    def close(self) -> int:
+        return self.retire()
 
 
 class TlsGenerationManager:
@@ -1627,9 +1774,14 @@ class TlsChannel:
         self.provider = generation.provider
         self.provider_name = generation.provider_name
         self.provider_info = generation.provider_info
+        self.is_client = generation.is_client
         self.session = None
         try:
-            self.session = self.provider.new_connection(generation.context, fd)
+            if self.is_client:
+                self.session = self.provider.new_client_connection(
+                    generation.context, fd, generation.config.server_name)
+            else:
+                self.session = self.provider.new_connection(generation.context, fd)
         except Exception as error:
             self.generation.release()
             self.generation = None
@@ -1641,8 +1793,10 @@ class TlsChannel:
         self.fd = fd
         self.handshake_complete = False
         self.sni_selected = False
-        self.server_name = ""
-        self.certificate_id = generation.config.default_certificate.identifier
+        self.server_name = generation.config.server_name if self.is_client else ""
+        self.certificate_id = ""
+        if not self.is_client:
+            self.certificate_id = generation.config.default_certificate.identifier
         self.alpn = ""
         self.peer_closed = False
         self.close_notify_started = False
@@ -1735,6 +1889,8 @@ class TlsChannel:
             return result
         result = self._validate_result("handshake", result)
         if result.status == TLS_SELECT_SNI:
+            if self.is_client:
+                return self._contract_failure("client handshake requested server SNI selection")
             if self.sni_selected:
                 return self._contract_failure("provider requested SNI more than once")
             try:
@@ -1769,6 +1925,8 @@ class TlsChannel:
                 return self._provider_failure("selected_alpn: " + str(error))
             if not isinstance(selected_alpn, str):
                 return self._contract_failure("selected_alpn returned a non-string")
+            if self.is_client and not selected_alpn:
+                return self._remember(_tls_error(TLS_ERR_ALPN, "TLS client ALPN missing"))
             if selected_alpn and selected_alpn not in self.generation.config.alpn:
                 return self._remember(
                     _tls_error(TLS_ERR_ALPN, "provider selected unconfigured ALPN")

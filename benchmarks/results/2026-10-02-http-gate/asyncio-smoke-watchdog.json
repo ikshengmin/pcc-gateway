@@ -1,0 +1,59 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/asyncio-smoke-samples.tsv",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/asyncio-smoke-runner.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc-gateway/benchmarks/results/2026-10-02-http-gate/asyncio-smoke-runner.stdout"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python",
+    "benchmarks/results/2026-10-02-http-gate/run-asyncio-smoke.py"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T08:19:46.256630+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc-gateway",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 1.2798047500000393,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_NO_AUTO_PCC1": "1",
+    "PCC_TEST_NO_NATIVE_PROVISIONING": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 3,
+  "largest_process_observed": {
+    "command": "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python /workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_http_asyncio.py 54017",
+    "elapsed_s": 1.023624,
+    "manifest_paths": [],
+    "pid": 12,
+    "ppid": 11,
+    "rss_bytes": 49000448
+  },
+  "max_tree_rss_bytes": 1073741824,
+  "peak_process_count": 3,
+  "peak_tree_rss_bytes": 77094912,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": 0,
+  "sample_count": 6,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T08:19:44.976827+00:00",
+  "status": "COMPLETE",
+  "terminal_processes": [
+    {
+      "command": "/workspace/scratch/ce254c0a0910/pcc-qualified-venv/bin/python benchmarks/results/2026-10-02-http-gate/run-asyncio-smoke.py",
+      "manifest_paths": [],
+      "pid": 8,
+      "ppid": 7,
+      "rss_bytes": 0
+    }
+  ],
+  "timeout_s": 120.0
+}

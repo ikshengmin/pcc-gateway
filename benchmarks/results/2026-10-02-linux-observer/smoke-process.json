@@ -1,0 +1,57 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/smoke.samples",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/smoke.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/smoke.stdout"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python",
+    "build/cloud-linux-observer/record_smoke.py"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T04:29:27.451555+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc-gateway",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 0.5160872260003089,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_NO_AUTO_PCC1": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 3,
+  "largest_process_observed": {
+    "command": "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python /workspace/scratch/ce254c0a0910/pcc-gateway/benchmark_asyncio_gather.py 2 10 2",
+    "elapsed_s": 0.261223,
+    "manifest_paths": [],
+    "pid": 22,
+    "ppid": 21,
+    "rss_bytes": 21520384
+  },
+  "max_tree_rss_bytes": 268435456,
+  "peak_process_count": 3,
+  "peak_tree_rss_bytes": 41824256,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": 0,
+  "sample_count": 3,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T04:29:26.935443+00:00",
+  "status": "COMPLETE",
+  "terminal_processes": [
+    {
+      "command": "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python build/cloud-linux-observer/record_smoke.py",
+      "manifest_paths": [],
+      "pid": 8,
+      "ppid": 7,
+      "rss_bytes": 0
+    }
+  ],
+  "timeout_s": 30.0
+}

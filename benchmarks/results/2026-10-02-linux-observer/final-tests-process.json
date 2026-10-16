@@ -1,0 +1,65 @@
+{
+  "artifacts": {
+    "samples": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/final-tests.samples",
+    "stderr": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/final-tests.stderr",
+    "stdout": "/workspace/scratch/ce254c0a0910/pcc-gateway/build/cloud-linux-observer/final-tests.stdout"
+  },
+  "command": [
+    "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_benchmark_observation.py",
+    "tests/test_benchmark_compile_receipts.py",
+    "tests/test_benchmark_process_cleanup.py",
+    "-x",
+    "-n0",
+    "-vv",
+    "--tb=short"
+  ],
+  "command_lookup_failure_count": 0,
+  "completed_at_utc": "2026-10-02T04:28:01.604077+00:00",
+  "cwd": "/workspace/scratch/ce254c0a0910/pcc-gateway",
+  "darwin_preflight_reserve_bytes": 0,
+  "elapsed_s": 1.7831584230007138,
+  "environment": {
+    "HOME": "/home/agent",
+    "LANG": "C.UTF-8",
+    "PATH": "/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "PCC_NO_AUTO_PCC1": "1",
+    "TMPDIR": "/tmp",
+    "XDG_CACHE_HOME": "/home/agent/.cache"
+  },
+  "interval_s": 0.25,
+  "known_process_count": 9,
+  "largest_process_observed": {
+    "command": "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short",
+    "elapsed_s": 1.275392,
+    "manifest_paths": [],
+    "pid": 6,
+    "ppid": 5,
+    "rss_bytes": 45309952
+  },
+  "max_tree_rss_bytes": 805306368,
+  "peak_process_count": 4,
+  "peak_tree_rss_bytes": 72015872,
+  "process_table_retry_count": 0,
+  "process_table_timeouts_s": [
+    1.0,
+    3.0
+  ],
+  "returncode": 0,
+  "sample_count": 8,
+  "schema": "pcc.process_tree_sample.v1",
+  "started_at_utc": "2026-10-02T04:27:59.820918+00:00",
+  "status": "COMPLETE",
+  "terminal_processes": [
+    {
+      "command": "/workspace/scratch/ce254c0a0910/pcc-cloud-venv/bin/python -m pytest tests/test_benchmark_observation.py tests/test_benchmark_compile_receipts.py tests/test_benchmark_process_cleanup.py -x -n0 -vv --tb=short",
+      "manifest_paths": [],
+      "pid": 6,
+      "ppid": 5,
+      "rss_bytes": 0
+    }
+  ],
+  "timeout_s": 120.0
+}
