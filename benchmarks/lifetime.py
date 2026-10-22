@@ -61,7 +61,7 @@ def main():
     environment = dict(os.environ, PYTHONPATH=str(compiler_source),
         PCC_SOURCE_ROOT=str(compiler_source), PCC_REPO_ROOT=str(compiler_source),
         PCC_RUNTIME_ARCHIVE=str(archive), PCC_RUNTIME_CC="/usr/bin/false",
-        PCC_GC_BACKEND="0", PCC_WITH_THREADS="0", PCC_RUNTIME_HIGH="py")
+        PCC_GC_BACKEND="0", PCC_WITH_THREADS="1", PCC_REFCOUNT_KIND="atomic", PCC_RUNTIME_HIGH="py")
     environment.pop("LC_ALL", None)
     environment.pop("PCC_PACKAGE_SITE", None)
     with _performance_lock():
@@ -79,7 +79,8 @@ def main():
             "archive_sha256": digest(archive), "probe_sha256": digest(source),
             "observer_sha256": digest(observer), "gc_backend": 0,
             "optimization_environment": {key: environment.get(key, "0") for key in
-                ("PCC_GENERATOR_FIRST_ENTRY_INIT", "PCC_FAST_COMPLETED_CONTINUATIONS",
+                ("PCC_WITH_THREADS", "PCC_REFCOUNT_KIND", "PCC_RUNTIME_HIGH",
+                 "PCC_GENERATOR_FIRST_ENTRY_INIT", "PCC_FAST_COMPLETED_CONTINUATIONS",
                  "PCC_DIRECT_GENERATOR_TASKS")}}
         save(args.output, report)
         command = [args.pcc, "--backend", "self", "--python-libpython", "off",

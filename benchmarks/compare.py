@@ -264,7 +264,8 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
     if args.compiler_source:
         env.update(PYTHONPATH=str(compiler_source), PCC_SOURCE_ROOT=str(compiler_source),
                    PCC_REPO_ROOT=str(compiler_source))
-    env.update(PCC_GC_BACKEND="0", PCC_WITH_THREADS="0", PCC_RUNTIME_HIGH="py")
+    env.update(PCC_GC_BACKEND="0", PCC_WITH_THREADS="1",
+               PCC_REFCOUNT_KIND="atomic", PCC_RUNTIME_HIGH="py")
     if environment is None:
         env["PCC_DISABLE_BULK_GENERATOR_FRAME_INIT"] = "1"
     if args.runtime_archive:
@@ -323,7 +324,7 @@ def compare(args, core, concurrencies, delays, parser, *, environment=None, arti
         "measurement_scope": WORKLOAD_SCOPE,
         "native_source_qualification": "not established by this legacy comparison; use the strict CI native admission gate",
         "optimization_environment": {key: env.get(key) for key in (
-            "PCC_GC_BACKEND", "PCC_WITH_THREADS", "PCC_RUNTIME_HIGH",
+            "PCC_GC_BACKEND", "PCC_WITH_THREADS", "PCC_REFCOUNT_KIND", "PCC_RUNTIME_HIGH",
             "PCC_DISABLE_BULK_GENERATOR_FRAME_INIT", "PCC_GENERATOR_FIRST_ENTRY_INIT",
             "PCC_FAST_COMPLETED_CONTINUATIONS", "PCC_DIRECT_GENERATOR_TASKS",
             "PCC_KNOWN_OBJECT_REFS", "PCC_PYTHON_IR_PASSES",

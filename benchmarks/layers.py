@@ -85,8 +85,8 @@ def main():
     from run_pcc_compile_ab import _performance_lock
 
     environment = dict(os.environ, PCC_RUNTIME_ARCHIVE=str(args.runtime_archive.resolve()),
-        PCC_RUNTIME_CC="/usr/bin/false", PCC_GC_BACKEND="0", PCC_WITH_THREADS="0",
-        PCC_RUNTIME_HIGH="py", PCC_GENERATOR_FIRST_ENTRY_INIT="1")
+        PCC_RUNTIME_CC="/usr/bin/false", PCC_GC_BACKEND="0", PCC_WITH_THREADS="1",
+        PCC_REFCOUNT_KIND="atomic", PCC_RUNTIME_HIGH="py", PCC_GENERATOR_FIRST_ENTRY_INIT="1")
     environment.pop("LC_ALL", None)
     environment.pop("PCC_PACKAGE_SITE", None)
     with _performance_lock():
@@ -99,6 +99,8 @@ def main():
             "runtime_archive_sha256": digest(args.runtime_archive),
             "base_source_sha256": digest(ROOT / "benchmark_native.py"),
             "asyncio_source_sha256": digest(ROOT / "benchmark_asyncio.py"),
+            "runtime_environment": {key: environment[key] for key in
+                ("PCC_GC_BACKEND", "PCC_WITH_THREADS", "PCC_REFCOUNT_KIND", "PCC_RUNTIME_HIGH")},
             "python_version": sys.version, "compilers": {}, "runs": [], "summary": []}
         save(args.output, report)
         commands = {}
