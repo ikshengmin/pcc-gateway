@@ -5,6 +5,13 @@ Use Python **3.15.0rc1**, a compatible compiler/runtime pair, a quiet machine
 and a new output name. The runners acquire the core performance lock and
 reject source/archive changes during a measurement.
 
+Current handler comparison, layer and lifetime drivers select the threaded
+pcc-Python runtime with atomic reference counts (`PCC_WITH_THREADS=1`,
+`PCC_REFCOUNT_KIND=atomic`) and record that configuration. The native handler
+still runs one carrier and the asyncio workload one event loop; runtime thread
+support does not change the workload's carrier count. Historical threads-off
+measurements below retain their original source and configuration identities.
+
 ## Measurement status
 
 Current-source native performance remains unqualified. A passing host CI or
