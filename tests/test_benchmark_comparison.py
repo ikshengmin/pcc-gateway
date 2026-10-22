@@ -96,6 +96,36 @@ def comparison_fixture(tmp_path, monkeypatch):
     return args, core, labels, called, amendments
 
 
+@pytest.mark.parametrize("explicit_environment", (False, True))
+def test_comparison_uses_the_threaded_atomic_runtime_for_compile_and_run(
+    comparison_fixture, monkeypatch, explicit_environment,
+):
+    args, core, _, _, _ = comparison_fixture
+    observed = []
+    original_compile = compare.compile_arm
+    original_run = compare.run_command
+
+    def compile_arm(*args, **kwargs):
+        observed.append(dict(kwargs["env"]))
+        return original_compile(*args, **kwargs)
+
+    def run(*args, **kwargs):
+        observed.append(dict(kwargs["env"]))
+        return original_run(*args, **kwargs)
+
+    monkeypatch.setattr(compare, "compile_arm", compile_arm)
+    monkeypatch.setattr(compare, "run_command", run)
+    environment = ({"PCC_WITH_THREADS": "1", "PCC_REFCOUNT_KIND": "atomic"}
+                   if explicit_environment else None)
+    compare.compare(args, core, [2], [0], argparse.ArgumentParser(), environment=environment)
+    assert observed
+    assert all(env["PCC_WITH_THREADS"] == "1" for env in observed)
+    assert all(env["PCC_REFCOUNT_KIND"] == "atomic" for env in observed)
+    report = json.loads(args.output.read_text())
+    assert report["optimization_environment"]["PCC_WITH_THREADS"] == "1"
+    assert report["optimization_environment"]["PCC_REFCOUNT_KIND"] == "atomic"
+
+
 @pytest.mark.parametrize("prototype", [False, True])
 @pytest.mark.parametrize("system", ["linux", "darwin"])
 def test_comparison_pools_p99_in_milliseconds_for_each_named_arm(comparison_fixture, monkeypatch, prototype, system):

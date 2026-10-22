@@ -79,7 +79,7 @@ def host_ci_never_compiles(monkeypatch):
 
 @pytest.fixture(scope="session")
 def pcc_py_runtime_archive():
-    return _runtime_archive(threaded=False)
+    return _runtime_archive(threaded=True)
 
 
 @pytest.fixture(scope="session")
