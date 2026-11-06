@@ -112,6 +112,38 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
+### Accepted same-Mac single-carrier baseline
+
+Source: gateway `582c8f5`, core `782821067` (host-pcc0 compilation, owned self
+backend and threaded atomic pcc-Python runtime, GC0). Hardware: Apple M2 Max,
+12 logical CPUs, macOS 26.5.1. Reference: CPython 3.14.7 / aiohttp 3.14.5;
+load generator: zrk 3.0.0, three threads. Both servers use one carrier/event
+loop, without CPU affinity. Each row below is **one** 15-second C10 run, not
+a repeated-run median or an official leaderboard result.
+
+| Route | pcc-gateway requests/s | aiohttp requests/s | pcc p99 ms | aiohttp p99 ms |
+| --- | ---: | ---: | ---: | ---: |
+| GET / | 2,655.0 | 22,463.7 | 8.948 | 0.786 |
+| GET /user/:id (changing IDs) | 2,624.6 | 20,312.6 | 5.926 | 0.921 |
+| POST /user | 2,674.9 | 21,564.8 | 8.308 | 0.817 |
+
+All six measured runs have zero transport/HTTP errors and pass the selected
+load-model checks. Each server passes all six original RSpec examples, the
+live body/framing contract, 1,001-request connection recycling and concurrent
+dynamic-ID checks. Both processes exit cleanly. Exact-child peak RSS over the
+whole arm (startup, probes, warmup and all three routes included) is 361,594,880
+bytes for gateway and 47,775,744 bytes for aiohttp. This is not a steady-state
+per-request memory measurement.
+
+Native binary SHA-256:
+`3f93314506675fe3a704e4d76c4b7b37949defb16960f9c3c0d0cc9181a58048`.
+Raw report SHA-256:
+`fb69a5cb6864859bd025ef8286390f43bce71301e0effaf9162c869c9e242794`.
+Raw receipts are retained outside Git. Reproduce the selected matrix with
+the Mac command above plus `--repeats 1 --concurrencies 10`.
+
+### Wider matrix remains incomplete
+
 At gateway `f88b173` and core `782821067`, the Mac native application passes
 all six upstream RSpec examples and the additional live HTTP contract. The
 first load run was rejected for read errors at the ordinary 1,000-request
@@ -120,8 +152,10 @@ Buffered, streaming and proxy responses now announce `Connection: close`
 before committing the final allowed response, while retaining the limit.
 The preflight now checks 1,001 sequential requests and automatic reconnection.
 
-155 focused transport/proxy/streaming/benchmark host checks pass. The new
-native rebuild and accepted throughput dataset remain pending. Core's numeric
+155 focused transport/proxy/streaming/benchmark host checks pass. The wider
+matrix subsequently stalls after its first C256 route, with the main thread
+and carrier waiting on the connection-state lock. That matrix is not accepted.
+Core's numeric
 method fix passed its CPython differential under GC0–4; the separately recorded
 pre-existing callback-finalizer count mismatch remains an open core boundary.
 Full suites, native pcc1 and bootstrap qualification are not established here.
