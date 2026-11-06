@@ -177,6 +177,39 @@ Raw report SHA-256:
 `b5575b28df7f12b258a49be7242b7f43a5c6f1250725fb60d6a935996b5f07fa`.
 Reproduce with `--repeats 1 --concurrencies 256 512`.
 
+### Deferred-method optimization: matched native A/B
+
+The core patch published as `92d73d8ab` is measured on the common core
+`8c604da53` baseline, with gateway `582c8f5` in both arms. The frozen candidate
+contains that method-call patch and its ABI chunk correction; the independently
+rebased GC4 selector changes are excluded from this paired experiment. Both
+arms use the owned host-pcc0/self/threaded-atomic pipeline, GC0 and one carrier.
+This is a compiler/runtime comparison, not another aiohttp run.
+
+Four repeats alternate candidate/control order at C10. Each measurement lasts
+15 seconds with three load threads. All 24 measured rows are server-bound with
+zero transport/HTTP errors; all contract/preflight checks and process exits pass.
+The table contains medians of four runs (including per-run p99 medians).
+
+| Route | Before requests/s | After requests/s | Change | Before p99 ms | After p99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GET / | 2,705.9 | 3,006.0 | +11.1% | 7.628 | 4.880 |
+| GET /user/:id (changing IDs) | 2,556.9 | 2,811.9 | +10.0% | 6.488 | 5.052 |
+| POST /user | 2,702.4 | 3,034.6 | +12.3% | 6.854 | 4.718 |
+
+Candidate QPS ranges are 2,991.7–3,193.8, 2,733.1–2,955.4 and
+2,902.6–3,199.7 respectively. Exact-child lifetime peak RSS medians are
+398,991,360 bytes for the candidate and 363,233,280 bytes for the control.
+These fixed-duration runs complete different request counts; they do not
+establish an equal-work memory improvement. The remaining aiohttp gap is open.
+
+Candidate binary SHA-256:
+`f829ce3cff30e94f878ecce3f03cfc8a2b62757c7f5e7e10a00b364412554975`.
+The control is the `f26e99d7...` binary in the C256/C512 table above.
+Raw report SHA-256:
+`34f1e0d4d52d898d1b71547956102a6023725c0d6cc2973cdfa9984da220f8b7`.
+Reproduce the native-control mode with `--repeats 4 --concurrencies 10`.
+
 ### Earlier failures and remaining qualification
 
 At gateway `f88b173` and core `782821067`, the Mac native application passes
