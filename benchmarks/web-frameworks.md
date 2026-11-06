@@ -307,6 +307,42 @@ An earlier callback-only C10/C512 matrix failed its final HTTP postflight after
 a server-idle POST interval. Three diagnostic cycles did not reproduce that
 stall; non-reproduction does not turn the failed matrix into an accepted score.
 
+### Latest ownership repair: native C512 A/B
+
+The same `2085bf26c` binary is compared with the queue-pressure candidate
+`b5f5df555...` above. This is a cumulative merged-source comparison, including
+the intervening peer root-span/GC changes, not attribution to a single patch.
+Two alternating repeats retain one carrier, GC0, three load threads and all
+ordinary connection limits. All 12 rows are server-bound, have zero HTTP or
+transport errors, pass the upstream and additional HTTP checks, and exit cleanly.
+
+| Route | Control requests/s | Latest requests/s | Latest p99 ms |
+| --- | ---: | ---: | ---: |
+| GET / | 2,884.1 | 2,958.9 | 268.896 |
+| GET /user/:id (changing IDs) | 2,648.0 | 2,567.4 | 298.848 |
+| POST /user | 2,529.9 | 2,800.2 | 309.664 |
+
+These are two-run medians, with variation between runs; they do not demonstrate
+a uniform throughput improvement. The native process peak RSS is
+44,728,320/44,695,552 bytes for the latest arm, versus
+402,718,720/376,832,000 for the control. This lifetime peak includes startup,
+preflights, warmup and all three timed routes, separately from the fixed-work
+live-allocation census above. Same-machine aiohttp has not been rerun in this
+native-control comparison; the earlier aiohttp numbers remain separate evidence.
+
+A preceding C10/C512 matrix completed all 24 rows, contracts and shutdowns,
+but four first-arm rows were not server-bound. Its overall medians are not
+accepted as throughput-ceiling evidence. The independently repeated C512
+matrix above retains all of its rows. A failure-only diagnostic wrapper can
+capture the owned server before teardown; it did not run during successful
+timed intervals and does not change the workload.
+
+Accepted raw report SHA-256:
+`42804874e7910fb088aafebf25ea7e7c0021819fcf07437a10aa42b5fa39894c`.
+Completed mixed-saturation report SHA-256:
+`6e32251743bf7b707b5fdf0c3e1e46234fc8cd1614a55f6a22eb43784456b0df`.
+Reproduce with the native-control mode and `--repeats 2 --concurrencies 512`.
+
 ### Earlier failures and remaining qualification
 
 At gateway `f88b173` and core `782821067`, the Mac native application passes
