@@ -9,10 +9,43 @@ connection, buffer and drain limits remain enabled.
 The comparison uses upstream revision
 [`6f7869a8ce3a5f456e24e00d3f9f55463745914e`](https://github.com/the-benchmarker/web-frameworks/tree/6f7869a8ce3a5f456e24e00d3f9f55463745914e).
 The upstream aiohttp application and dependency manifest are downloaded without
-modification. Both server images use the same resolved `python:3.14-slim` base
+modification.
+
+## Same-Mac comparison
+
+`benchmarks.web_frameworks_macos` runs the native gateway and unchanged upstream
+aiohttp sequentially on the same Mac. It uses the same routes, dynamic-ID Lua,
+closed-loop keep-alive model, five-second warmup and 15-second measurements as
+the container lane below. An available shared port avoids existing services;
+the unchanged RSpec suite uses a recorded `Net::HTTP` port shim. macOS CPU
+affinity is unavailable and is explicitly reported. Per-run process CPU deltas
+and the existing exact-child wait4 observer record utilization and lifetime RSS;
+the observer's external C compiler builds measurement tooling only.
+
+The core checkout exposes this through its `benchmarks/webserver.py` entry:
+
+```sh
+uv run python ../pcc/benchmarks/webserver.py --output "$EVIDENCE/mac-comparison" \
+  --native "$EVIDENCE/web-frameworks-macos" \
+  --build-receipt "$EVIDENCE/mac-compile.json" \
+  --python /path/to/aiohttp-venv/bin/python --zrk /path/to/zrk \
+  --ruby /path/to/ruby --rspec /path/to/rspec --gem-home /path/to/gems \
+  --threads 3
+```
+
+Build the Mac executable using the frozen-source command below without
+`--target`. The core entry provides the performance lock, process-tree watchdog,
+2400-second limit and 2 GiB measurement-tree cap. Select the actual reference
+Python and dependency versions explicitly; they are recorded in the report.
+
+## Linux Docker comparison
+
+Both server images use the same resolved `python:3.14-slim` base
 digest and run sequentially on CPU 0 in one Linux Docker guest. The native
 gateway executable does not run under that image's Python interpreter. Load
-generation runs on CPUs 1–3 with three zrk threads. Each server has a 1 GiB
+generation runs on CPUs 1–3 with three zrk threads. Server and client share an
+isolated network namespace and its loopback, avoiding host port collisions
+without bridge/NAT/port-forwarding on the measured path. Each server has a 1 GiB
 container memory limit. Docker must provide at least four CPUs.
 
 Before and after each arm, an independent live probe checks changing IDs,
@@ -79,8 +112,10 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
-The route/HTTP-codec and runner checks pass (22 focused tests). Native comparison
-is in progress. The first current-source Linux build exposed a core CMS TLS
+The route/HTTP-codec and runner checks pass (27 focused tests). Native Mac
+comparison is in progress. The first current-source Linux build exposed a core CMS TLS
 handoff defect; core commit `d345f400b` fixes its cross-module access through the
-existing getter and adds nonzero native TLS coverage. No gateway QPS result or
-whole-runtime qualification is established yet.
+existing getter and adds nonzero native TLS coverage. The repaired Linux image
+links but exits while reading system resolver configuration; that lane remains
+blocked, with no throughput result. Native Mac construction succeeds. No gateway
+QPS result or whole-runtime qualification is established yet.

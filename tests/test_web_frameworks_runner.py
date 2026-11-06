@@ -5,6 +5,7 @@ import copy
 import pytest
 
 from benchmarks.web_frameworks import ROUTES, summarize, validate_result, zrk_command
+from benchmarks.web_frameworks_macos import parse_cpu_time
 
 
 def result():
@@ -64,3 +65,21 @@ def test_invalid_or_different_workload_is_not_accepted(path, value):
 def test_partial_matrix_cannot_be_presented_as_complete():
     with pytest.raises(ValueError, match="incomplete"):
         summarize([], 3, [10])
+
+
+@pytest.mark.parametrize("value,seconds", [
+    ("0:00.10", .1), ("3:01.25", 181.25), ("01:02:03", 3723),
+    ("2-01:02:03", 176523),
+])
+def test_mac_cpu_observation_handles_clock_fields(value, seconds):
+    assert parse_cpu_time(value) == seconds
+
+
+def test_mac_port_override_is_identical_in_command_and_validation():
+    command = zrk_command("GET", "/", 10, 3, "out.json", port=45678)
+    assert command[-1] == "http://127.0.0.1:45678/"
+    data = result()
+    data["target"]["url"] = command[-1]
+    assert validate_result(data, "GET", "/", 10, port=45678)["requests"] == 30000
+    with pytest.raises(ValueError):
+        validate_result(data, "GET", "/", 10)

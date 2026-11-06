@@ -55,7 +55,7 @@ def download(url, path):
         path.write_bytes(response.read())
 
 
-def zrk_command(method, route, concurrency, threads, output, *, duration=15):
+def zrk_command(method, route, concurrency, threads, output, *, duration=15, port=3000, script=None):
     # Build a fresh argument list for EVERY route. The pinned upstream
     # config.rake retains zrk_args['script'] after /user/42; reusing it for
     # POST /user would make Lua send GET /user/<id> instead of the POST.
@@ -66,17 +66,17 @@ def zrk_command(method, route, concurrency, threads, output, *, duration=15):
         "--output", output,
     ]
     if (method, route) == ("GET", "/user/42"):
-        command += ["--script", "/work/upstream/.load_scripts/user_id.lua"]
-    return command + ["http://127.0.0.1:3000" + route]
+        command += ["--script", str(script or "/work/upstream/.load_scripts/user_id.lua")]
+    return command + ["http://127.0.0.1:" + str(port) + route]
 
 
-def validate_result(data, method, route, concurrency, duration=15):
+def validate_result(data, method, route, concurrency, duration=15, *, port=3000):
     config = data["config"]
     if (data.get("interrupted", False) or data.get("zrk_version") != ZRK_VERSION
             or config["closed"] is not True or config["disable_keepalive"] is not False
             or config["connections"] != concurrency or config["duration_s"] != duration
             or config["timeout_ms"] != 8000 or config["streams"] != 1
-            or data["target"] != {"url": "http://127.0.0.1:3000" + route, "method": method}):
+            or data["target"] != {"url": "http://127.0.0.1:" + str(port) + route, "method": method}):
         raise ValueError("load model, route, tool version or duration mismatch")
     requests = data["requests"]
     elapsed = data["duration_s"]
@@ -129,6 +129,20 @@ class Runner:
         self.prefix = "pcc-web-frameworks-" + uuid.uuid4().hex[:12]
         self.containers = set()
         self.commands = []
+        self.network = "none"
+
+    def start_network(self, image):
+        # Share loopback without exposing the host's existing port 3000.
+        # Both arms and the client enter the SAME kernel network namespace;
+        # no bridge, NAT or port-forwarding sits on the measured path.
+        name = self.prefix + "-network"
+        self.containers.add(name)
+        self.command([
+            "docker", "run", "-d", "--name", name, "--network", "none",
+            "--label", "pcc.web-frameworks.run=" + self.prefix,
+            "--memory", "32m", "--entrypoint", "sleep", image, "infinity",
+        ])
+        self.network = "container:" + name
 
     def command(self, command, *, timeout=60, env=None):
         self.serial += 1
@@ -144,14 +158,16 @@ class Runner:
             raise RuntimeError("command failed: " + str(log))
         return result.stdout.strip()
 
-    def client(self, image, command, *, cpus="1-3", timeout=60, env=()):
+    def client(self, image, command, *, cpus="1-3", timeout=60, env=(), entrypoint=None):
         name = self.prefix + "-client"
         self.containers.add(name)
         try:
             return self.command([
-                "docker", "run", "--rm", "--name", name, "--network", "host",
+                "docker", "run", "--rm", "--name", name, "--network", self.network,
+                "--label", "pcc.web-frameworks.run=" + self.prefix,
                 "--cpuset-cpus", cpus, "--memory", "1g", "-v", str(self.output) + ":/work",
-                "-w", "/work/upstream", *env, image, *command,
+                "-w", "/work/upstream", *env,
+                *(["--entrypoint", entrypoint] if entrypoint else []), image, *command,
             ], timeout=timeout)
         finally:
             self.remove(name)
@@ -171,11 +187,20 @@ class Runner:
         self.containers.add(name)
         try:
             cid = self.command([
-                "docker", "run", "-d", "--name", name, "--network", "host",
+                "docker", "run", "-d", "--name", name, "--network", self.network,
+                "--label", "pcc.web-frameworks.run=" + self.prefix,
                 "--cpuset-cpus", "0", "--memory", "1g", image,
             ])
             yield cid
-        finally:
+        except BaseException:
+            # Preserve the original failure; timeout cleanup must not spend
+            # the normal 35-second graceful-drain budget before killing it.
+            try:
+                self.command(["docker", "logs", name], timeout=5)
+            finally:
+                self.remove(name)
+            raise
+        else:
             try:
                 self.command(["docker", "stop", "-t", "35", name], timeout=45)
                 self.command(["docker", "logs", name])
@@ -192,7 +217,8 @@ def prepare(runner, native):
     for path in UPSTREAM_FILES:
         download(UPSTREAM + UPSTREAM_REV + "/" + path, upstream / path)
     source_hashes = {path: digest(upstream / path) for path in UPSTREAM_FILES}
-    info = json.loads(runner.command(["docker", "info", "--format", "{{json .}}"] ))
+    info_text = runner.command(["docker", "info", "--format", "{{json .}}"])
+    info = json.loads(info_text)
     arch = info["Architecture"]
     if arch not in ZRK_ARCHIVES or info["OSType"] != "linux" or info["NCPU"] < 4:
         raise RuntimeError("requires Linux Docker with >=4 CPUs and a supported architecture")
@@ -240,8 +266,7 @@ def prepare(runner, native):
         runner.command(["docker", "build", "-f", str(path), "-t", tag, str(context)], timeout=300)
         images[arm] = runner.command(["docker", "image", "inspect", tag, "--format", "{{.Id}}"])
     reference = runner.client(base, ["python", "--version"])
-    installed = runner.command(["docker", "run", "--rm", "--entrypoint", "python",
-                               images["aiohttp"], "-m", "pip", "freeze"])
+    installed = runner.client(images["aiohttp"], ["-m", "pip", "freeze"], entrypoint="python")
     probe = Path(__file__).with_name("web_frameworks_probe.py")
     shutil.copyfile(probe, root / "probe.py")
     for arm in ("pcc-gateway", "aiohttp"):
@@ -262,6 +287,7 @@ def compare(args):
     runner = Runner(output)
     report = {"schema": "pcc-gateway.web-frameworks.v1", "complete": False,
               "status": "RUNNING", "host": platform.platform(), "runs": [],
+              "container_label": "pcc.web-frameworks.run=" + runner.prefix,
               "server_cpus": "0", "load_cpus": "1-3", "server_memory_limit": "1g",
               "duration_seconds": 15, "repeats": args.repeats,
               "concurrencies": args.concurrencies, "routes": ROUTES,
@@ -286,6 +312,7 @@ def compare(args):
         report["inputs"] = prepare(runner, args.native.resolve())
         save(report_path, report)
         images = report["inputs"]["images"]
+        runner.start_network(report["inputs"]["server_base"])
         for repeat in range(args.repeats):
             order = ("pcc-gateway", "aiohttp") if repeat % 2 == 0 else ("aiohttp", "pcc-gateway")
             for arm in order:
