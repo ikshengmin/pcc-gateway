@@ -210,6 +210,39 @@ Raw report SHA-256:
 `34f1e0d4d52d898d1b71547956102a6023725c0d6cc2973cdfa9984da220f8b7`.
 Reproduce the native-control mode with `--repeats 4 --concurrencies 10`.
 
+### Merged source: C64/C256/C512 versus aiohttp
+
+Core `92d73d8ab` (including the peers' GC4 selector commits), gateway `582c8f5`,
+and runner `21cd016` were rebuilt and measured with the same Mac, GC0, one
+carrier/event loop, three load threads and reference versions above. All 18
+15-second measurements are server-bound with zero HTTP/transport errors;
+both processes pass the contracts/preflights and exit cleanly. This is one
+repeat per row, not the four-repeat matched A/B above.
+
+| Route | Concurrency | pcc-gateway requests/s | aiohttp requests/s | pcc p99 ms | aiohttp p99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GET / | 64 | 2,932.5 | 22,723.2 | 45.520 | 3.445 |
+| GET / | 256 | 2,833.3 | 22,611.7 | 1,209.856 | 12.916 |
+| GET / | 512 | 2,914.1 | 22,193.7 | 2,694.144 | 28.456 |
+| GET /user/:id (changing IDs) | 64 | 2,817.7 | 21,876.3 | 29.336 | 3.541 |
+| GET /user/:id (changing IDs) | 256 | 2,573.4 | 21,404.7 | 1,208.832 | 13.396 |
+| GET /user/:id (changing IDs) | 512 | 2,720.5 | 20,860.6 | 2,941.952 | 29.960 |
+| POST /user | 64 | 2,944.0 | 22,966.3 | 39.152 | 3.399 |
+| POST /user | 256 | 3,033.7 | 22,381.5 | 1,041.152 | 12.924 |
+| POST /user | 512 | 2,945.7 | 21,872.3 | 2,755.584 | 27.480 |
+
+The gateway remains at roughly 12–14% of same-machine aiohttp throughput.
+High-concurrency tail latency and memory remain open performance work.
+Exact-child lifetime peak RSS, including startup/probes/warmup/all nine native
+measurements, is 1,052,622,848 bytes for gateway and 53,411,840 for aiohttp.
+This does not identify retained live objects or establish a leak diagnosis.
+
+Native binary SHA-256:
+`1328d429926fde247ac12db2d68c7a6285198cb77f15db22bba749ac0b41bb6d`.
+Raw report SHA-256:
+`3436c7c3986eb3b74eaac826589d98b20710fe29bf9b6b61c6ddd03b0654f408`.
+Reproduce with `--repeats 1 --concurrencies 64 256 512`.
+
 ### Earlier failures and remaining qualification
 
 At gateway `f88b173` and core `782821067`, the Mac native application passes
