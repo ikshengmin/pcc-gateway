@@ -17,7 +17,11 @@ from benchmarks.web_frameworks import (
     ROUTES, UPSTREAM, UPSTREAM_FILES, UPSTREAM_REV, Runner, ZRK_VERSION,
     digest, download, save, summarize, validate_result, zrk_command,
 )
-from benchmarks.web_frameworks_probe import verify, verify_connection_recycling
+from benchmarks.web_frameworks_probe import (
+    verify,
+    verify_concurrent_ids,
+    verify_connection_recycling,
+)
 
 
 PORT_SHIM = '''require 'net/http'
@@ -141,6 +145,7 @@ def compare(args):
                     runner.command([str(args.zrk), *command[1:]])
                     validate_result(json.loads(warmup.read_text()), "GET", "/", 50, 5, port=port)
                     for concurrency in args.concurrencies:
+                        verify_concurrent_ids(port, concurrency)
                         for index, (method, route) in enumerate(ROUTES):
                             name = f"{arm}-{repeat + 1}-c{concurrency}-route{index}"
                             print(name, flush=True)

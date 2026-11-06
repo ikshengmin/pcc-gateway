@@ -1,6 +1,7 @@
 """Independent live HTTP gate, run before and after each benchmark arm."""
 
 import http.client
+import asyncio
 import socket
 import time
 
@@ -63,6 +64,38 @@ def verify_connection_recycling(port=3000, expected_limit=0):
     finally:
         connection.close()
     print("WEB_FRAMEWORKS_CONNECTION_RECYCLING_OK", flush=True)
+
+
+def verify_concurrent_ids(port, concurrency):
+    """Check fresh response bodies under the same connection width as load."""
+    from benchmarks.http_compare import read_response
+
+    nonce = time.monotonic_ns() % 10000000
+
+    async def client(index):
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        try:
+            for turn in range(2):
+                value = f"{nonce + turn * concurrency + index:08d}"
+                writer.write(("GET /user/" + value + " HTTP/1.1\r\nHost: local\r\n\r\n").encode())
+                await writer.drain()
+                status, _headers, body = await read_response(reader)
+                if not 200 <= status < 300 or body != value.encode():
+                    raise RuntimeError("concurrent dynamic-ID response mismatch")
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def group():
+        async with asyncio.TaskGroup() as scope:
+            for index in range(concurrency):
+                scope.create_task(client(index))
+
+    async def bounded():
+        await asyncio.wait_for(group(), 8)
+
+    asyncio.run(bounded())
+    print("WEB_FRAMEWORKS_CONCURRENT_IDS_OK", concurrency, flush=True)
 
 
 if __name__ == "__main__":
