@@ -8,7 +8,13 @@ truncated reply is reopened as nonblocking TCP by ``DnsResolveDriver`` through
 the same adapter.
 """
 
-from pcc.extern import c_int64, c_ptr, extern, c_obj, c_rawptr
+from pcc.extern import (
+    c_int64,
+    c_obj,
+    c_ptr,
+    c_rawptr,
+    extern,
+)
 from pcc.unsafe import abi_constant, load_i64, ptr_add, stack_alloc
 
 from .dns import (
@@ -34,37 +40,39 @@ _DNS_PROTOCOL_TCP = 1
 _SYSTEM_TEXT_LIMIT = 65535
 
 
+# Class-method locals can box raw addresses as Python integers. c_rawptr
+# projects their address bits; c_ptr below intentionally passes a PyStr object.
 _platform_dns_connect_start = extern(
     "pcc_platform_dns_connect_start",
-    (c_int64, c_ptr, c_ptr, c_ptr),
+    (c_int64, c_rawptr, c_rawptr, c_rawptr),
     c_int64,
 )
 _platform_udp_connect_start = extern(
-    "pcc_platform_udp_connect_start", (c_ptr, c_ptr, c_ptr), c_int64
+    "pcc_platform_udp_connect_start", (c_rawptr, c_rawptr, c_rawptr), c_int64
 )
 _platform_socket_connect_observe = extern(
     "pcc_platform_socket_connect_observe", (c_int64, c_int64), c_int64
 )
 _platform_socket_read_observe = extern(
     "pcc_platform_socket_read_observe",
-    (c_int64, c_ptr, c_int64, c_int64, c_ptr),
+    (c_int64, c_rawptr, c_int64, c_int64, c_rawptr),
     c_int64,
 )
 _platform_socket_write_observe = extern(
     "pcc_platform_socket_write_observe",
-    (c_int64, c_ptr, c_int64, c_int64, c_ptr),
+    (c_int64, c_rawptr, c_int64, c_int64, c_rawptr),
     c_int64,
 )
 _platform_resolver_config_read = extern(
-    "pcc_platform_resolver_config_read", (c_ptr, c_int64), c_int64
+    "pcc_platform_resolver_config_read", (c_rawptr, c_int64), c_int64
 )
 _platform_hosts_config_read = extern(
-    "pcc_platform_hosts_config_read", (c_ptr, c_int64), c_int64
+    "pcc_platform_hosts_config_read", (c_rawptr, c_int64), c_int64
 )
 _platform_random_u16 = extern("pcc_platform_random_u16", (), c_int64)
 _platform_close = extern("pcc_platform_close", (c_int64,), c_int64)
 _py_str_utf8 = extern("py_str_utf8", (c_ptr,), c_rawptr)
-_py_bytes_new = extern("py_bytes_new", (c_ptr, c_int64), c_obj)
+_py_bytes_new = extern("py_bytes_new", (c_rawptr, c_int64), c_obj)
 
 
 def _map_socket_outcome(outcome: int) -> int:

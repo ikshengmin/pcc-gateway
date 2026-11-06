@@ -116,6 +116,10 @@ The route/HTTP-codec and runner checks pass (27 focused tests). Native Mac
 comparison is in progress. The first current-source Linux build exposed a core CMS TLS
 handoff defect; core commit `d345f400b` fixes its cross-module access through the
 existing getter and adds nonzero native TLS coverage. The repaired Linux image
-links but exits while reading system resolver configuration; that lane remains
-blocked, with no throughput result. Native Mac construction succeeds. No gateway
-QPS result or whole-runtime qualification is established yet.
+links, and both Linux and Mac initially stopped while reading resolver
+configuration. A class-method native reproducer traced that failure to raw
+buffer arguments declared as `c_ptr` instead of `c_rawptr`. The gateway's DNS,
+socket and TLS text adapters now declare raw address arguments explicitly.
+119 focused host checks and a native exact-byte system-config regression pass;
+the complete application rebuild and throughput comparison remain pending.
+No gateway QPS result or whole-runtime qualification is established yet.

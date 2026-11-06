@@ -13,7 +13,14 @@ numeric/hosts/DNS HTTP/1 upstreams.  TLS cryptography stays behind the reviewed
 native provider ABI; no Python ``ssl`` or host interpreter participates.
 """
 
-from pcc.extern import c_int64, c_ptr, c_str, extern, c_obj, c_rawptr
+from pcc.extern import (
+    c_int64,
+    c_obj,
+    c_ptr,
+    c_rawptr,
+    c_str,
+    extern,
+)
 from pcc.unsafe import abi_constant, load_i64, null, ptr_add, stack_alloc
 import pcc.virtual_thread as virtual_thread
 import threading
@@ -81,16 +88,18 @@ _PROXY_CLIENT_OBSERVE_SLICE_MS = 25
 _PROXY_DOWNSTREAM_RESPONSE_COMMITTED = "downstream-protocol-committed"
 
 
+# Buffer/C-string addresses may reside in boxed method locals. Declare those
+# arguments as raw pointers; py_str_utf8 still receives the managed string.
 _platform_tcp_listen_with_backlog = extern(
     "pcc_platform_tcp_listen_with_backlog",
-    (c_ptr, c_ptr, c_int64, c_int64),
+    (c_rawptr, c_rawptr, c_int64, c_int64),
     c_int64,
 )
 _platform_tcp_accept_observe = extern(
-    "pcc_platform_tcp_accept_observe", (c_int64, c_ptr), c_int64
+    "pcc_platform_tcp_accept_observe", (c_int64, c_rawptr), c_int64
 )
 _platform_socket_peer_text = extern(
-    "pcc_platform_socket_peer_text", (c_int64, c_ptr, c_int64), c_int64
+    "pcc_platform_socket_peer_text", (c_int64, c_rawptr, c_int64), c_int64
 )
 _platform_tcp_connect_start = extern(
     "pcc_platform_tcp_connect_start", (c_str, c_str, c_rawptr), c_int64
@@ -100,12 +109,12 @@ _platform_socket_connect_observe = extern(
 )
 _platform_socket_read_observe = extern(
     "pcc_platform_socket_read_observe",
-    (c_int64, c_ptr, c_int64, c_int64, c_ptr),
+    (c_int64, c_rawptr, c_int64, c_int64, c_rawptr),
     c_int64,
 )
 _platform_socket_write_observe = extern(
     "pcc_platform_socket_write_observe",
-    (c_int64, c_ptr, c_int64, c_int64, c_ptr),
+    (c_int64, c_rawptr, c_int64, c_int64, c_rawptr),
     c_int64,
 )
 _platform_socket_shutdown = extern(
@@ -115,8 +124,8 @@ _platform_close = extern("pcc_platform_close", (c_int64,), c_int64)
 _platform_monotonic_us = extern("pcc_platform_monotonic_us", (), c_int64)
 _platform_sleep_ns = extern("pcc_platform_sleep_ns", (c_int64,), c_int64)
 _py_str_utf8 = extern("py_str_utf8", (c_ptr,), c_rawptr)
-_py_str_new = extern("py_str_new", (c_ptr, c_int64), c_obj)
-_py_bytes_new = extern("py_bytes_new", (c_ptr, c_int64), c_obj)
+_py_str_new = extern("py_str_new", (c_rawptr, c_int64), c_obj)
+_py_bytes_new = extern("py_bytes_new", (c_rawptr, c_int64), c_obj)
 
 
 class GatewayError(RuntimeError):

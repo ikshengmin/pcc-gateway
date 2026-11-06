@@ -38,7 +38,12 @@ falling back to a host interpreter or plaintext.
 import os
 from threading import Lock
 
-from pcc.extern import c_int64, c_ptr, extern, c_obj
+from pcc.extern import (
+    c_int64,
+    c_obj,
+    c_rawptr,
+    extern,
+)
 from pcc.unsafe import (
     call_i64_i64_ptr,
     cstr,
@@ -163,7 +168,7 @@ _PCC_TLS_REQ_PROVIDER_CODE = 136
 _PCC_TLS_REQ_INPUT3 = 144
 _PCC_TLS_REQ_INPUT3_LEN = 152
 
-_py_str_new = extern("py_str_new", (c_ptr, c_int64), c_obj)
+_py_str_new = extern("py_str_new", (c_rawptr, c_int64), c_obj)
 
 
 class TlsProviderError(RuntimeError):
