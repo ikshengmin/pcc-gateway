@@ -243,6 +243,33 @@ Raw report SHA-256:
 `3436c7c3986eb3b74eaac826589d98b20710fe29bf9b6b61c6ddd03b0654f408`.
 Reproduce with `--repeats 1 --concurrencies 64 256 512`.
 
+### Queue pressure: matched native C512 A/B
+
+Core scheduler patch `32b9aaa12` is applied to the same compiler/runtime source
+as the `92d73d8ab` control (peer `68d7e1288` GC4 tuning is excluded from this
+paired measurement). Gateway `582c8f5`, one carrier, GC0, three load threads and
+the original resource limits are retained. Two repeats alternate arm order;
+all 12 measured 15-second rows are server-bound with zero HTTP/transport errors,
+successful preflights/contracts and clean process exits.
+
+| Route | Before requests/s | After requests/s | Change | Before p99 ms | After p99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GET / | 2,896.5 | 3,003.0 | +3.7% | 2,878.464 | 276.128 |
+| GET /user/:id (changing IDs) | 2,617.5 | 2,718.4 | +3.9% | 2,982.912 | 359.808 |
+| POST /user | 2,835.0 | 2,801.5 | -1.2% | 2,838.528 | 279.648 |
+
+These are two-run medians. Tail latency improves by roughly 88–90%; throughput
+does not improve uniformly. The runtime retains its 256-entry local queues and
+64-step IO polling batch, but shares service with a live injection backlog and
+uses FIFO under a large ready set. The separate 400-task native reproducer
+reaches every task in 512 steps, versus 9,113 before the change.
+
+Candidate binary SHA-256:
+`b5f5df555c8d0bfa460e11425ec86fc4f709989be0dad031c0c02891a1cfef64`.
+Control binary: the `1328d429...` merged artifact above. Raw report SHA-256:
+`357ab61e7a53084d92b690de70c651a002a48e4c8ea9b1339cddc10b8c71c87f`.
+Reproduce the native-control mode with `--repeats 2 --concurrencies 512`.
+
 ### Earlier failures and remaining qualification
 
 At gateway `f88b173` and core `782821067`, the Mac native application passes
