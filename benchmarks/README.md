@@ -14,6 +14,10 @@ measurements below retain their original source and configuration identities.
 
 ## Measurement status
 
+The [Web Frameworks Benchmark adapter](web-frameworks.md) implements the
+upstream three-route contract and a same-guest native-vs-aiohttp comparison.
+Its current execution boundary and reproduction commands are recorded there.
+
 Current-source native performance remains unqualified. A passing host CI or
 benchmark-reporting test does not establish pcc1 execution or a win over
 asyncio; see the [current qualification scope](../docs/ci.md).
