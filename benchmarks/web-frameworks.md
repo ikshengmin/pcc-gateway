@@ -120,6 +120,8 @@ links, and both Linux and Mac initially stopped while reading resolver
 configuration. A class-method native reproducer traced that failure to raw
 buffer arguments declared as `c_ptr` instead of `c_rawptr`. The gateway's DNS,
 socket and TLS text adapters now declare raw address arguments explicitly.
-119 focused host checks and a native exact-byte system-config regression pass;
-the complete application rebuild and throughput comparison remain pending.
-No gateway QPS result or whole-runtime qualification is established yet.
+119 focused host checks and a native exact-byte system-config regression pass.
+The rebuilt Mac server starts, accepts connections and exits on SIGTERM, but
+closes the first HTTP request without a response. That request-path failure is
+under investigation; no throughput result or whole-runtime qualification is
+established yet.

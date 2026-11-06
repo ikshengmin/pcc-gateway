@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import resource
 import shutil
 import signal
 import sys
@@ -86,6 +87,9 @@ def compare(args):
             download(UPSTREAM + UPSTREAM_REV + "/" + name, upstream / name)
         report["upstream_files"] = {name: digest(upstream / name) for name in UPSTREAM_FILES}
         report["reference_python"] = runner.command([str(args.python), "--version"])
+        report["cpu_model"] = runner.command(["sysctl", "-n", "machdep.cpu.brand_string"])
+        report["logical_cpus"] = os.cpu_count()
+        report["open_file_limits"] = list(resource.getrlimit(resource.RLIMIT_NOFILE))
         report["reference_packages"] = runner.command([
             str(args.python), "-c",
             "import importlib.metadata,json; print(json.dumps({d.metadata['Name']:d.version for d in importlib.metadata.distributions()},sort_keys=True))",
