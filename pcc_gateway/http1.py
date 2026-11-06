@@ -249,20 +249,14 @@ def _parse_chunk_size_line(line: bytes) -> int:
 
 
 def _latin1_text(data: bytes) -> str:
-    characters: list[str] = []
-    for value in data:
-        characters.append(chr(value))
-    return "".join(characters)
+    return data.decode("latin-1")
 
 
 def _latin1_bytes(text: str) -> bytes:
-    output = bytearray(b"")
-    for character in text:
-        value = ord(character)
-        if value > 255:
-            raise Http1Error(500, "bad-header", "header value is outside Latin-1")
-        output.append(value)
-    return bytes(output)
+    try:
+        return text.encode("latin-1")
+    except UnicodeEncodeError:
+        raise Http1Error(500, "bad-header", "header value is outside Latin-1") from None
 
 
 def _parse_headers(lines: list[bytes], max_count: int):

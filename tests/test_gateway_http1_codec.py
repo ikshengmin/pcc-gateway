@@ -80,6 +80,24 @@ def test_latin1_header_octets_survive_request_and_response_encoding() -> None:
     assert b"x-label: \xff\r\n" in wire
 
 
+def test_latin1_conversion_preserves_every_octet_and_empty_values() -> None:
+    data = bytes(range(256))
+    text = "".join(chr(value) for value in range(256))
+    assert http1_module._latin1_text(data) == text
+    assert http1_module._latin1_bytes(text) == data
+    assert http1_module._latin1_text(b"") == ""
+    assert http1_module._latin1_bytes("") == b""
+
+
+@pytest.mark.parametrize("value", ["\u0100", "\ud800", "\U0010ffff", "valid\u20ac"])
+def test_latin1_conversion_keeps_the_http_error_boundary(value: str) -> None:
+    with pytest.raises(Http1Error) as caught:
+        http1_module._latin1_bytes(value)
+    assert caught.value.status == 500
+    assert caught.value.code == "bad-header"
+    assert str(caught.value) == "header value is outside Latin-1"
+
+
 def test_chunked_body_and_trailers_are_incremental() -> None:
     codec = Http1ServerCodec()
     events = codec.feed(
