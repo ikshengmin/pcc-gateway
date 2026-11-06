@@ -103,12 +103,12 @@ def validate_result(data, method, route, concurrency, duration=15, *, port=3000)
             **{key + "_ms": latencies[key] / 1000 for key in ("p50", "p75", "p90", "p99")}}
 
 
-def summarize(runs, repeats, concurrencies):
+def summarize(runs, repeats, concurrencies, reference="aiohttp"):
     result = []
     for method, route in ROUTES:
         for concurrency in concurrencies:
             row = {"method": method, "route": route, "concurrency": concurrency}
-            for arm in ("pcc-gateway", "aiohttp"):
+            for arm in ("pcc-gateway", reference):
                 group = [run for run in runs if (run["arm"], run["method"], run["route"], run["concurrency"])
                          == (arm, method, route, concurrency)]
                 if len(group) != repeats:
@@ -117,7 +117,8 @@ def summarize(runs, repeats, concurrencies):
                             for key in ("requests_per_s", "p50_ms", "p75_ms", "p90_ms", "p99_ms")}
                 row[arm]["qps_min"] = min(run["requests_per_s"] for run in group)
                 row[arm]["qps_max"] = max(run["requests_per_s"] for run in group)
-            row["pcc_over_aiohttp"] = row["pcc-gateway"]["requests_per_s"] / row["aiohttp"]["requests_per_s"]
+            ratio_name = "pcc_over_aiohttp" if reference == "aiohttp" else "pcc_over_reference"
+            row[ratio_name] = row["pcc-gateway"]["requests_per_s"] / row[reference]["requests_per_s"]
             result.append(row)
     return result
 

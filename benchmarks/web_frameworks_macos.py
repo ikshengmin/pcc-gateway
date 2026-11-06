@@ -1,4 +1,4 @@
-"""Same-Mac native gateway vs unchanged upstream aiohttp HTTP benchmark."""
+"""Same-Mac HTTP comparison against upstream aiohttp or a native control."""
 
 import argparse
 import json
@@ -61,17 +61,27 @@ def compare(args):
     output.mkdir(parents=True, exist_ok=False)
     runner = Runner(output)
     native = args.native.resolve()
+    reference = "native-control" if args.reference_native else "aiohttp"
+    reference_binary = args.reference_native or args.python
     build = json.loads(args.build_receipt.read_text())
     if build.get("status") != "COMPLETE" or build.get("returncode") != 0:
         raise ValueError("a successful native compilation watchdog receipt is required")
     shutil.copyfile(args.build_receipt, output / "native-build.json")
-    inputs = {str(path.resolve()): digest(path) for path in (
-        native, args.python, args.zrk, args.build_receipt,
+    identity_paths = [
+        native, reference_binary, args.zrk, args.build_receipt,
         *Path(__file__).parent.glob("*.py"),
         Path(__file__).with_name("process_observer.c"),
-    )}
+    ]
+    if args.reference_native:
+        reference_build = json.loads(args.reference_build_receipt.read_text())
+        if reference_build.get("status") != "COMPLETE" or reference_build.get("returncode") != 0:
+            raise ValueError("a successful native control compilation receipt is required")
+        shutil.copyfile(args.reference_build_receipt, output / "reference-build.json")
+        identity_paths.append(args.reference_build_receipt)
+    inputs = {str(path.resolve()): digest(path) for path in identity_paths}
     report = {"schema": "pcc-gateway.web-frameworks-macos.v1", "status": "RUNNING",
         "complete": False, "upstream_revision": UPSTREAM_REV, "host": platform.platform(),
+        "reference_arm": reference,
         "inputs": inputs, "runs": [], "arms": [], "duration_seconds": 15,
         "repeats": args.repeats, "concurrencies": args.concurrencies,
         "server_carriers_or_event_loops": 1, "load_threads": args.threads,
@@ -90,14 +100,20 @@ def compare(args):
         for name in UPSTREAM_FILES:
             download(UPSTREAM + UPSTREAM_REV + "/" + name, upstream / name)
         report["upstream_files"] = {name: digest(upstream / name) for name in UPSTREAM_FILES}
-        report["reference_python"] = runner.command([str(args.python), "--version"])
         report["cpu_model"] = runner.command(["sysctl", "-n", "machdep.cpu.brand_string"])
         report["logical_cpus"] = os.cpu_count()
         report["open_file_limits"] = list(resource.getrlimit(resource.RLIMIT_NOFILE))
-        report["reference_packages"] = runner.command([
-            str(args.python), "-c",
-            "import importlib.metadata,json; print(json.dumps({d.metadata['Name']:d.version for d in importlib.metadata.distributions()},sort_keys=True))",
-        ])
+        if args.python:
+            report["reference_python"] = runner.command([str(args.python), "--version"])
+            report["reference_packages"] = runner.command([
+                str(args.python), "-c",
+                "import importlib.metadata,json; print(json.dumps({d.metadata['Name']:d.version for d in importlib.metadata.distributions()},sort_keys=True))",
+            ])
+        else:
+            linkage = runner.command(["otool", "-L", str(args.reference_native)])
+            if "libpython" in linkage.lower():
+                raise ValueError("native control links libpython")
+            report["reference_linkage"] = linkage
         if runner.command([str(args.zrk), "--version"]) != "zrk " + ZRK_VERSION:
             raise ValueError("the selected zrk version is not the pinned version")
         linkage = runner.command(["otool", "-L", str(native)])
@@ -120,10 +136,11 @@ def compare(args):
         if args.gem_home:
             contract_env.update(GEM_HOME=str(args.gem_home), GEM_PATH=str(args.gem_home))
         commands = {"pcc-gateway": [str(native)],
-                    "aiohttp": [str(args.python), str(upstream / "python/aiohttp/server.py")]}
+                    reference: ([str(args.reference_native)] if args.reference_native else
+                                [str(args.python), str(upstream / "python/aiohttp/server.py")])}
         save(path, report)
         for repeat in range(args.repeats):
-            order = ("pcc-gateway", "aiohttp") if repeat % 2 == 0 else ("aiohttp", "pcc-gateway")
+            order = ("pcc-gateway", reference) if repeat % 2 == 0 else (reference, "pcc-gateway")
             for arm in order:
                 prefix = output / f"{arm}-{repeat + 1}"
                 print(f"repeat={repeat + 1} arm={arm} contract port={port}", flush=True)
@@ -139,7 +156,7 @@ def compare(args):
                             or parsed["summary"]["failure_count"] or parsed["summary"]["pending_count"]):
                         raise ValueError("upstream RSpec contract did not fully pass")
                     save(prefix.with_suffix(".contract.json"), parsed)
-                    verify_connection_recycling(port, 1000 if arm == "pcc-gateway" else 0)
+                    verify_connection_recycling(port, 0 if arm == "aiohttp" else 1000)
                     warmup = output / f"{arm}-{repeat + 1}-warmup.json"
                     command = zrk_command("GET", "/", 50, args.threads, str(warmup), duration=5, port=port)
                     runner.command([str(args.zrk), *command[1:]])
@@ -178,7 +195,7 @@ def compare(args):
             raise ValueError("benchmark inputs changed during the run")
         if any(digest(upstream / name) != value for name, value in report["upstream_files"].items()):
             raise ValueError("upstream inputs changed during the run")
-        report["summary"] = summarize(report["runs"], args.repeats, args.concurrencies)
+        report["summary"] = summarize(report["runs"], args.repeats, args.concurrencies, reference)
         report["all_runs_server_bound"] = all(run["saturation"] == "server-bound" for run in report["runs"])
         report.update(status="COMPLETE", complete=True)
     except BaseException as error:
@@ -190,13 +207,19 @@ def compare(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("native", "build-receipt", "python", "zrk", "ruby", "rspec", "output"):
+    for name in ("native", "build-receipt", "zrk", "ruby", "rspec", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--python", type=Path, help="Python with upstream aiohttp installed")
+    selection.add_argument("--reference-native", type=Path, help="Native control with the same HTTP API and request limit")
+    parser.add_argument("--reference-build-receipt", type=Path)
     parser.add_argument("--gem-home", type=Path)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--concurrencies", type=int, nargs="+", default=[10, 64, 256, 512])
     parser.add_argument("--threads", type=int, default=os.cpu_count())
     args = parser.parse_args()
+    if args.reference_native and not args.reference_build_receipt:
+        parser.error("--reference-native requires --reference-build-receipt")
     if (min(args.repeats, args.threads, *args.concurrencies) <= 0
             or len(set(args.concurrencies)) != len(args.concurrencies)):
         parser.error("requires positive counts and distinct concurrencies")

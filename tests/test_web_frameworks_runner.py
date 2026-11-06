@@ -83,3 +83,15 @@ def test_mac_port_override_is_identical_in_command_and_validation():
     assert validate_result(data, "GET", "/", 10, port=45678)["requests"] == 30000
     with pytest.raises(ValueError):
         validate_result(data, "GET", "/", 10)
+
+
+def test_native_control_summary_is_not_mislabeled_as_aiohttp():
+    rows = []
+    for method, route in ROUTES:
+        for arm, qps in (("pcc-gateway", 2200), ("native-control", 2000)):
+            rows.append({"arm": arm, "method": method, "route": route,
+                         "concurrency": 10, "requests_per_s": qps,
+                         "p50_ms": 1, "p75_ms": 2, "p90_ms": 3, "p99_ms": 4})
+    for row in summarize(rows, 1, [10], "native-control"):
+        assert row["pcc_over_reference"] == 1.1
+        assert "aiohttp" not in row and "pcc_over_aiohttp" not in row

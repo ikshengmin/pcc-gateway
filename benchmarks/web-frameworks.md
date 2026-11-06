@@ -38,6 +38,14 @@ Build the Mac executable using the frozen-source command below without
 2400-second limit and 2 GiB measurement-tree cap. Select the actual reference
 Python and dependency versions explicitly; they are recorded in the report.
 
+For a compiler/runtime A/B, replace `--python` with
+`--reference-native "$CONTROL_BINARY" --reference-build-receipt "$CONTROL_BUILD"`.
+Both native applications must use the same API, carrier count and ordinary
+1,000-request connection limit. The runner labels the reference `native-control`,
+checks both build receipts and binary identities, and alternates arm order.
+Use an even repeat count for balanced ordering; this mode does not produce an
+aiohttp comparison.
+
 ## Linux Docker comparison
 
 Both server images use the same resolved `python:3.14-slim` base
@@ -142,7 +150,34 @@ Raw report SHA-256:
 Raw receipts are retained outside Git. Reproduce the selected matrix with
 the Mac command above plus `--repeats 1 --concurrencies 10`.
 
-### Wider matrix remains incomplete
+### Accepted C256/C512 after mixed-waiter repair
+
+With the same gateway `582c8f5` and core `8c604da53`, all 12 measurements at
+C256/C512 complete without transport/HTTP errors, timeouts or server-idle
+intervals. Both arms pass the upstream contract and live preflights and exit
+cleanly. The core repair changes lock notification/retry semantics; this run
+retains one carrier, the same resource limits and the same Mac/reference setup
+above. Each row is one 15-second measurement, not a repeated-run median.
+
+| Route | Concurrency | pcc-gateway requests/s | aiohttp requests/s | pcc p99 ms |
+| --- | ---: | ---: | ---: | ---: |
+| GET / | 256 | 2,823.9 | 22,263.8 | 1,149.440 |
+| GET / | 512 | 2,770.1 | 21,919.5 | 3,032.064 |
+| GET /user/:id (changing IDs) | 256 | 2,606.3 | 21,139.9 | 1,178.112 |
+| GET /user/:id (changing IDs) | 512 | 2,604.7 | 20,802.0 | 3,027.968 |
+| POST /user | 256 | 2,761.1 | 22,313.0 | 1,154.560 |
+| POST /user | 512 | 2,656.6 | 21,745.3 | 3,060.736 |
+
+The stall is fixed; throughput and tail latency still need optimization.
+Exact-child lifetime peak RSS is 699,121,664 bytes for gateway and 53,428,224
+bytes for aiohttp, including probes, warmup and all six route/concurrency runs.
+Native binary SHA-256:
+`f26e99d761c581dbeecf7db7fd2712603fb2d1af4b01ab906c84dc124239aa69`.
+Raw report SHA-256:
+`b5575b28df7f12b258a49be7242b7f43a5c6f1250725fb60d6a935996b5f07fa`.
+Reproduce with `--repeats 1 --concurrencies 256 512`.
+
+### Earlier failures and remaining qualification
 
 At gateway `f88b173` and core `782821067`, the Mac native application passes
 all six upstream RSpec examples and the additional live HTTP contract. The
@@ -153,8 +188,9 @@ before committing the final allowed response, while retaining the limit.
 The preflight now checks 1,001 sequential requests and automatic reconnection.
 
 155 focused transport/proxy/streaming/benchmark host checks pass. The wider
-matrix subsequently stalls after its first C256 route, with the main thread
-and carrier waiting on the connection-state lock. That matrix is not accepted.
+matrix with core `782821067` subsequently stalled after its first C256 route,
+with the main thread and carrier waiting on the connection-state lock. That
+earlier matrix is not accepted; the repaired run above is separate evidence.
 Core's numeric
 method fix passed its CPython differential under GC0–4; the separately recorded
 pre-existing callback-finalizer count mismatch remains an open core boundary.
