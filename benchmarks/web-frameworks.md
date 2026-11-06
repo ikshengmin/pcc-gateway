@@ -270,6 +270,43 @@ Control binary: the `1328d429...` merged artifact above. Raw report SHA-256:
 `357ab61e7a53084d92b690de70c651a002a48e4c8ea9b1339cddc10b8c71c87f`.
 Reproduce the native-control mode with `--repeats 2 --concurrencies 512`.
 
+### Native ownership repairs: fixed-work memory
+
+Core `2085bf26c` includes the chained-receiver, bound-callback, special-method
+receiver and slice-delete ownership repairs, together with the merged peer
+changes through `79ccda713`. The application remains gateway `582c8f5`, compiled
+by host pcc0 with the owned self backend and matching threaded runtime.
+
+The uninstrumented native application handles four batches of 5,000 ordinary
+GET requests, each using ten new connections with 500 keep-alive requests per
+connection. A bounded read-only debugger census between batches records live
+allocator bytes and tracked objects. These pauses exclude this experiment from
+throughput comparison. HTTP checks before/after and clean shutdown pass.
+
+| Point | Tracked objects | Live requested bytes | RSS bytes |
+| --- | ---: | ---: | ---: |
+| Initial | 1,812 | 3,510,657 | 30,326,784 |
+| 5,000 requests | 1,812 | 3,597,873 | 31,227,904 |
+| 10,000 requests | 1,812 | 3,597,873 | 31,227,904 |
+| 15,000 requests | 1,812 | 3,597,873 | 31,227,904 |
+| 20,000 requests | 1,812 | 3,597,873 | 31,227,904 |
+
+The queue-pressure control above reaches 30,500,654 live requested bytes and
+78,856,192 RSS bytes after the same 20,000-request workload. The repaired
+artifact shows no further growth after its first batch; this bounded result
+does not establish every workload's lifetime behavior. Thirty-five focused
+core checks cover the latest special-call/comparison and slice-delete repairs,
+including native execution under GC0–4. Full suites/bootstrap remain unrun.
+
+Native binary SHA-256:
+`bcf2735819b25ba4292492d3b38f54aa19967ff65cf248951c86d251be1e9437`.
+Fixed-work report SHA-256:
+`f365183eb2f9b59439e1075a1f53e2c75bd8bc573faa29fa602ea5c547d107e2`.
+Throughput must be measured separately with the native-control runner above.
+An earlier callback-only C10/C512 matrix failed its final HTTP postflight after
+a server-idle POST interval. Three diagnostic cycles did not reproduce that
+stall; non-reproduction does not turn the failed matrix into an accepted score.
+
 ### Earlier failures and remaining qualification
 
 At gateway `f88b173` and core `782821067`, the Mac native application passes
