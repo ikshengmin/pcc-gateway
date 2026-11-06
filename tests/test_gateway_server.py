@@ -618,6 +618,55 @@ def test_connection_close_request_does_not_dispatch_pipelined_followup() -> None
     _release_connection(connection, lifecycle, generation)
 
 
+@pytest.mark.parametrize("streaming", [False, True])
+def test_request_limit_is_announced_before_the_final_response_body(streaming):
+    def handler(request):
+        if streaming:
+            return Response.stream([b"ok"])
+        return Response.text("ok")
+
+    connection, lifecycle, generation = _connection(
+        App(routes=(get("/", handler),)),
+        GatewayConfig(max_requests_per_connection=2),
+    )
+    try:
+        for index in range(2):
+            connection.feed_data(b"GET / HTTP/1.1\r\nHost: local\r\n\r\n")
+            output = bytearray(connection.take_output())
+            while connection.pending_stream_request is not None:
+                connection._drive_streaming_response()
+                output.extend(connection.take_output())
+            assert b"HTTP/1.1 200 OK" in output
+            assert (b"connection: close\r\n" in output.lower()) == (index == 1)
+        assert connection.requests_completed == 2
+        assert connection.close_after_flush
+        assert connection.feed_data(b"GET / HTTP/1.1\r\nHost: local\r\n\r\n") == 0
+        assert connection.take_output() == b""
+    finally:
+        _release_connection(connection, lifecycle, generation)
+
+
+def test_proxy_request_limit_is_carried_to_downstream_response_headers():
+    transport = ProxyFakeTransport()
+    transport.reads = [(PCC_SOCKET_PROGRESS, b"GET /api/value HTTP/1.1\r\nHost: front\r\n\r\n")]
+    transport.upstream_reads = [(PCC_SOCKET_PROGRESS,
+        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")]
+    group = UpstreamGroup("backend", (UpstreamEndpoint("127.0.0.1", 9000),))
+    app = App(routes=(proxy("/api/{path*}", "backend"),), upstreams=(group,))
+    connection, lifecycle, generation = _proxy_connection(
+        app, transport, GatewayConfig(max_requests_per_connection=1),
+    )
+    try:
+        connection.run()
+        assert bytes(transport.written).endswith(b"ok")
+        assert b"connection: close\r\n" in bytes(transport.written).lower()
+        assert connection.requests_completed == 1
+    finally:
+        for pool in connection.proxy_pools.values():
+            pool.close_idle()
+        _release_connection(connection, lifecycle, generation)
+
+
 def test_live_one_message_decode_preserves_first_response_before_bad_pipeline() -> None:
     calls = []
 

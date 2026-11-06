@@ -479,6 +479,7 @@ class ProxyExchange:
         high_watermark: int = -1,
         max_buffered_bytes: int = 1048576,
         accounting=None,
+        downstream_keep_alive: bool = True,
     ) -> None:
         if max_buffered_bytes <= 0:
             raise ValueError("max buffered bytes must be positive")
@@ -502,6 +503,7 @@ class ProxyExchange:
         self.cancelled = False
         self.cancel_reason = ""
         self.upstream_keep_alive = False
+        self.downstream_keep_alive = downstream_keep_alive
         self.downstream_chunked = False
         self.accounting = accounting
         self.encoder = Http1ResponseEncoder()
@@ -645,6 +647,7 @@ class ProxyExchange:
                         headers,
                         content_length=length if not self.downstream_chunked else -1,
                         chunked=self.downstream_chunked,
+                        keep_alive=self.downstream_keep_alive,
                     )
                 ) or transition
             elif isinstance(event, UpstreamResponseBody):

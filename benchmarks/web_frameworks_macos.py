@@ -17,7 +17,7 @@ from benchmarks.web_frameworks import (
     ROUTES, UPSTREAM, UPSTREAM_FILES, UPSTREAM_REV, Runner, ZRK_VERSION,
     digest, download, save, summarize, validate_result, zrk_command,
 )
-from benchmarks.web_frameworks_probe import verify
+from benchmarks.web_frameworks_probe import verify, verify_connection_recycling
 
 
 PORT_SHIM = '''require 'net/http'
@@ -135,6 +135,7 @@ def compare(args):
                             or parsed["summary"]["failure_count"] or parsed["summary"]["pending_count"]):
                         raise ValueError("upstream RSpec contract did not fully pass")
                     save(prefix.with_suffix(".contract.json"), parsed)
+                    verify_connection_recycling(port, 1000 if arm == "pcc-gateway" else 0)
                     warmup = output / f"{arm}-{repeat + 1}-warmup.json"
                     command = zrk_command("GET", "/", 50, args.threads, str(warmup), duration=5, port=port)
                     runner.command([str(args.zrk), *command[1:]])

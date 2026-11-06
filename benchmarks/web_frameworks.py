@@ -319,7 +319,9 @@ def compare(args):
                 print(f"repeat={repeat + 1} arm={arm} contract", flush=True)
                 with runner.server(images[arm], arm) as cid:
                     # Probe retries startup only; a wrong HTTP response fails immediately.
-                    runner.client(report["inputs"]["server_base"], ["python", "/work/probe.py"])
+                    probe_command = ["python", "/work/probe.py", "--request-limit",
+                                     "1000" if arm == "pcc-gateway" else "0"]
+                    runner.client(report["inputs"]["server_base"], probe_command)
                     contract = runner.client(images["client"], ["rspec", ".spec/route_spec.rb", "--format", "json"],
                         env=("-e", "LANGUAGE=python", "-e", "FRAMEWORK=" + arm, "-e", "ENGINE=benchmark"))
                     parsed = json.loads(contract)
@@ -351,7 +353,7 @@ def compare(args):
                                 "route": route, "concurrency": concurrency, "raw": name + ".json",
                                 "raw_sha256": digest(output / (name + ".json")), "saturation": validity, **result})
                             save(report_path, report)
-                    runner.client(report["inputs"]["server_base"], ["python", "/work/probe.py"])
+                    runner.client(report["inputs"]["server_base"], probe_command)
         if digest(args.native) != report["inputs"]["native_sha256"]:
             raise ValueError("native executable changed during comparison")
         report["summary"] = summarize(report["runs"], args.repeats, args.concurrencies)

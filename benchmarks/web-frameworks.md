@@ -112,16 +112,16 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
-The route/HTTP-codec and runner checks pass (27 focused tests). Native Mac
-comparison is in progress. The first current-source Linux build exposed a core CMS TLS
-handoff defect; core commit `d345f400b` fixes its cross-module access through the
-existing getter and adds nonzero native TLS coverage. The repaired Linux image
-links, and both Linux and Mac initially stopped while reading resolver
-configuration. A class-method native reproducer traced that failure to raw
-buffer arguments declared as `c_ptr` instead of `c_rawptr`. The gateway's DNS,
-socket and TLS text adapters now declare raw address arguments explicitly.
-119 focused host checks and a native exact-byte system-config regression pass.
-The rebuilt Mac server starts, accepts connections and exits on SIGTERM, but
-closes the first HTTP request without a response. That request-path failure is
-under investigation; no throughput result or whole-runtime qualification is
-established yet.
+At gateway `f88b173` and core `782821067`, the Mac native application passes
+all six upstream RSpec examples and the additional live HTTP contract. The
+first load run was rejected for read errors at the ordinary 1,000-request
+connection limit: the server closed without advertising that decision.
+Buffered, streaming and proxy responses now announce `Connection: close`
+before committing the final allowed response, while retaining the limit.
+The preflight now checks 1,001 sequential requests and automatic reconnection.
+
+155 focused transport/proxy/streaming/benchmark host checks pass. The new
+native rebuild and accepted throughput dataset remain pending. Core's numeric
+method fix passed its CPython differential under GC0–4; the separately recorded
+pre-existing callback-finalizer count mismatch remains an open core boundary.
+Full suites, native pcc1 and bootstrap qualification are not established here.

@@ -49,5 +49,27 @@ def verify(host="127.0.0.1", port=3000):
     print("WEB_FRAMEWORKS_HTTP_CONTRACT_OK", flush=True)
 
 
+def verify_connection_recycling(port=3000, expected_limit=0):
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+    try:
+        for index in range(1, 1002):
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            advertised_close = response.getheader("Connection", "").lower() == "close"
+            expected_close = expected_limit > 0 and index % expected_limit == 0
+            if advertised_close != expected_close:
+                raise RuntimeError("incorrect connection-limit response header at request " + str(index))
+            check(response, b"")
+    finally:
+        connection.close()
+    print("WEB_FRAMEWORKS_CONNECTION_RECYCLING_OK", flush=True)
+
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--request-limit", type=int, default=0)
+    args = parser.parse_args()
     verify()
+    verify_connection_recycling(expected_limit=args.request_limit)

@@ -688,6 +688,16 @@ class GatewayConnection:
         if first_error is not None:
             raise first_error
 
+    def _response_keep_alive(self) -> bool:
+        # Completion closes the connection at this limit. Advertise that
+        # decision in the current head, before any body bytes are committed.
+        return (
+            self.current_keep_alive
+            and not self.close_after_flush
+            and self.requests_completed + 1 < self.config.max_requests_per_connection
+            and self.lifecycle.state == STATE_RUNNING
+        )
+
     def _begin_streaming_response(self, request, response, admitted: bool) -> None:
         # User iterator construction may execute arbitrary __iter__ code and
         # raise.  Do it before queueing a committed head or publishing any
@@ -701,7 +711,7 @@ class GatewayConnection:
                 "connection",
             ):
                 headers.append((name, value))
-        keep_alive = self.current_keep_alive and not self.close_after_flush
+        keep_alive = self._response_keep_alive()
         self._queue_bytes(
             self.encoder.head(
                 response.status,
@@ -886,7 +896,7 @@ class GatewayConnection:
                 continue
             headers.append((name, value))
 
-        keep_alive = self.current_keep_alive and not self.close_after_flush
+        keep_alive = self._response_keep_alive()
         content_length_forbidden = (
             100 <= response.status < 200 or response.status == 204
         )
@@ -2109,6 +2119,7 @@ def _proxy_exchange_attempt(connection: GatewayConnection, plan, pool, attempt: 
             high_watermark=connection.config.buffers.high_watermark,
             max_buffered_bytes=connection.config.buffers.connection_bytes,
             accounting=connection.lifecycle,
+            downstream_keep_alive=connection._response_keep_alive(),
         )
         failure = _proxy_write_queued(
             connection, pooled.handle, exchange, deadline, request
