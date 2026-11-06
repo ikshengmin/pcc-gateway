@@ -307,7 +307,7 @@ An earlier callback-only C10/C512 matrix failed its final HTTP postflight after
 a server-idle POST interval. Three diagnostic cycles did not reproduce that
 stall; non-reproduction does not turn the failed matrix into an accepted score.
 
-### Latest ownership repair: native C512 A/B
+### Ownership repair: native C512 A/B
 
 The same `2085bf26c` binary is compared with the queue-pressure candidate
 `b5f5df555...` above. This is a cumulative merged-source comparison, including
@@ -342,6 +342,38 @@ Accepted raw report SHA-256:
 Completed mixed-saturation report SHA-256:
 `6e32251743bf7b707b5fdf0c3e1e46234fc8cd1614a55f6a22eb43784456b0df`.
 Reproduce with the native-control mode and `--repeats 2 --concurrencies 512`.
+
+### Latest codec conversion: native C512 A/B
+
+Three longer profiles of the ownership-repaired executable attribute roughly
+9–12% of filtered native samples to the handwritten Latin-1 conversion loops.
+A separate, untimed application-IR counter build records approximately
+20,700 / 22,664 / 21,413 direct calls per handled request on the three routes.
+For plain GET, the two conversion functions account for about 2,090 of those
+calls. Counters are diagnostic only; completed handler entries, including
+the final ten in-flight requests, are the normalization denominator.
+
+Gateway `b83d215` replaces those loops with ordinary `decode("latin-1")` and
+`encode("latin-1")`, preserving the existing HTTP error for values outside
+Latin-1. Fifty host HTTP/route checks and five isolated native codec cases
+under GC0–4 pass, including every byte value, empty values, invalid Unicode,
+collection and request/response round trips. Full application execution is
+verified separately by the benchmark. Core/compiler/runtime remain the same
+frozen `2085bf26c` inputs used by the control; no benchmark-only handler changes
+or resource-limit changes are involved.
+
+Two alternating C512 repeats complete all 12 server-bound rows with successful
+upstream/additional HTTP checks, zero transport errors and clean shutdown:
+
+| Route | Control requests/s | Codec requests/s | Change | Codec p99 ms |
+| --- | ---: | ---: | ---: | ---: |
+| GET / | 3,191.3 | 3,446.3 | +8.0% | 198.272 |
+| GET /user/:id (changing IDs) | 2,882.1 | 3,201.2 | +11.1% | 198.784 |
+| POST /user | 2,954.1 | 3,374.8 | +14.2% | 185.984 |
+
+These are same-run, two-repeat medians. Earlier tables have different run
+conditions and are not the denominator for these percentages. Aiohttp was not
+rerun; full suites and native-pcc1/bootstrap qualification remain unrun.
 
 ### Earlier failures and remaining qualification
 
