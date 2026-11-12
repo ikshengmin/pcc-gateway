@@ -310,7 +310,7 @@ def _gateway_accept_entry(server) -> None:
             raise GatewayTransportError(
                 "gateway listener descriptor changed under accept owner"
             )
-        accepted = virtual_thread.call(server.accept_once, listener_fd)
+        accepted = virtual_thread.call(server.accept_ready, listener_fd)
         if accepted == 0:
             if server.transport.native_virtual_threads:
                 _park_native_fd(
@@ -2914,6 +2914,78 @@ class GatewayServer:
             raise
 
     def accept_once(self, listener_fd: int = -1) -> int:
+        outcome, fd, client_ip, generation = self._accept_pending(listener_fd)
+        if outcome != 1:
+            return outcome
+        return virtual_thread.call(
+            self._start_accepted_connection, fd, client_ip, generation
+        )
+
+    def accept_ready(self, listener_fd: int = -1) -> int:
+        """Drain ready sockets before initializing their HTTP/TLS sessions.
+
+        The accept continuation owns this bounded batch until each socket is
+        transferred to its connection task. Admission and generation references
+        are acquired immediately, so reload and shutdown retain the same owners.
+        """
+        pending = []
+        transferred = 0
+        progress = 0
+        try:
+            # Admission bounds retained sockets. Stop on a rejection too, so a
+            # full server never spins indefinitely accepting and closing peers.
+            while len(pending) < self.config.admission.max_connections:
+                outcome, fd, client_ip, generation = self._accept_pending(
+                    listener_fd
+                )
+                if outcome == 0:
+                    break
+                progress = 1
+                if outcome < 0:
+                    break
+                pending.append((fd, client_ip, generation))
+            # A zero connection limit must still accept and reject one peer.
+            if self.config.admission.max_connections == 0:
+                outcome, fd, client_ip, generation = self._accept_pending(
+                    listener_fd
+                )
+                progress = outcome
+            while transferred < len(pending):
+                if self.lifecycle.state != STATE_RUNNING:
+                    break
+                fd, client_ip, generation = pending[transferred]
+                # The callee owns cleanup even if construction or spawn fails.
+                transferred += 1
+                virtual_thread.call(
+                    self._start_accepted_connection, fd, client_ip, generation
+                )
+            return progress
+        finally:
+            # Cancellation, drain, or a failed session must not strand the
+            # sockets which have left the kernel queue but have no task yet.
+            while transferred < len(pending):
+                fd, client_ip, generation = pending[transferred]
+                transferred += 1
+                self._discard_accepted_connection(fd, generation)
+
+    def _discard_accepted_connection(self, fd: int, generation) -> None:
+        # Every release is independent; preserve the initiating failure even
+        # when a provider's generation cleanup or transport close also fails.
+        if generation is not None:
+            try:
+                generation.release()
+            except Exception:
+                pass
+        try:
+            self.lifecycle.release_connection()
+        except Exception:
+            pass
+        try:
+            virtual_thread.call(self.transport.close, fd)
+        except Exception:
+            pass
+
+    def _accept_pending(self, listener_fd: int):
         if listener_fd < 0:
             listener_fd = self.listener_fd
         if (
@@ -2921,20 +2993,30 @@ class GatewayServer:
             or listener_fd != self.listener_fd
             or self.lifecycle.state != STATE_RUNNING
         ):
-            return 0
+            return 0, -1, "", None
         outcome, fd, client_ip = self.transport.accept(listener_fd)
         if outcome == PCC_SOCKET_WOULD_BLOCK:
-            return 0
+            return 0, -1, "", None
         if outcome != PCC_SOCKET_PROGRESS or fd < 0:
             raise GatewayTransportError("socket accept observation failed")
         if not self.lifecycle.admit_connection():
             virtual_thread.call(self.transport.close, fd)
-            return -1
+            return -1, -1, "", None
         self.generation_lock.acquire()
         generation = None
-        tls_channel = None
         try:
             generation = self.lifecycle.acquire_generation()
+        except Exception:
+            self._discard_accepted_connection(fd, generation)
+            raise
+        finally:
+            self.generation_lock.release()
+        return 1, fd, client_ip, generation
+
+    def _start_accepted_connection(self, fd: int, client_ip: str, generation) -> int:
+        self.generation_lock.acquire()
+        tls_channel = None
+        try:
             connection_resolver = self.resolver
             if isinstance(connection_resolver, LazySystemResolver):
                 connection_resolver = connection_resolver.fork()
@@ -2971,19 +3053,7 @@ class GatewayServer:
                     virtual_thread.call(tls_channel.close)
                 except Exception:
                     pass
-            if generation is not None:
-                try:
-                    generation.release()
-                except Exception:
-                    pass
-            try:
-                self.lifecycle.release_connection()
-            except Exception:
-                pass
-            try:
-                virtual_thread.call(self.transport.close, fd)
-            except Exception:
-                pass
+            self._discard_accepted_connection(fd, generation)
             raise
         finally:
             self.generation_lock.release()

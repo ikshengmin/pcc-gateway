@@ -518,7 +518,7 @@ def test_gateway_top_level_may_park_edges_use_explicit_call_boundary() -> None:
     source = Path(gateway_server.__file__).read_text(encoding="utf-8")
     normalized_source = "".join(source.split())
     required = (
-        "virtual_thread.call(server.accept_once, listener_fd)",
+        "virtual_thread.call(server.accept_ready, listener_fd)",
         "virtual_thread.call(server._connection_finished, connection)",
         "virtual_thread.call(connection._drive_pending_local)",
         "virtual_thread.call(connection._drive_streaming_response)",

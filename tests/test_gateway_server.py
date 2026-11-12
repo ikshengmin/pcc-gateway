@@ -1647,6 +1647,114 @@ def test_listener_accept_spawns_one_virtual_thread_per_connection() -> None:
     app.shutdown()
 
 
+def test_accept_ready_drains_listener_before_constructing_sessions(monkeypatch) -> None:
+    transport = FakeTransport()
+    scheduler = FakeScheduler()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53, 54)
+    ]
+    server = GatewayServer(App(), transport=transport, scheduler=scheduler)
+    server.start()
+    generation = server.lifecycle.current
+    constructed = []
+
+    def construct(*args, **kwargs):
+        assert transport.accepts == []
+        assert server.lifecycle.metrics.get("connections_active") == 3
+        assert generation.references == 4
+        connection = GatewayConnection(*args, **kwargs)
+        constructed.append(connection.fd)
+        return connection
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", construct)
+    assert server.accept_ready() == 1
+    assert constructed == [52, 53, 54]
+    assert len(server.connection_owners) == 3
+    assert server.accept_ready() == 0
+    for connection in list(server.connections):
+        connection.close("test")
+        server._connection_finished(connection)
+    assert generation.references == 1
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
+def test_accept_ready_failure_releases_unstarted_sockets(monkeypatch) -> None:
+    transport = FakeTransport()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53, 54)
+    ]
+    server = GatewayServer(App(), transport=transport, scheduler=FakeScheduler())
+    server.start()
+    generation = server.lifecycle.current
+
+    def construct(*args, **kwargs):
+        if args[1] == 53:
+            raise RuntimeError("session initialization failed")
+        return GatewayConnection(*args, **kwargs)
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", construct)
+    with pytest.raises(RuntimeError, match="session initialization failed"):
+        server.accept_ready()
+    assert transport.closed == [53, 54]
+    assert [connection.fd for connection in server.connections] == [52]
+    assert generation.references == 2
+    assert server.lifecycle.metrics.get("connections_active") == 1
+    connection = server.connections[0]
+    connection.close("test")
+    server._connection_finished(connection)
+    assert generation.references == 1
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
+def test_accept_ready_drain_releases_batch_without_spawning() -> None:
+    class DrainingTransport(FakeTransport):
+        def accept(self, listener_fd: int):
+            if not self.accepts:
+                server.request_stop()
+            return super().accept(listener_fd)
+
+    transport = DrainingTransport()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53)
+    ]
+    scheduler = FakeScheduler()
+    server = GatewayServer(App(), transport=transport, scheduler=scheduler)
+    server.start()
+    generation = server.lifecycle.current
+    assert server.accept_ready() == 1
+    assert transport.closed == [52, 53]
+    assert server.connections == []
+    assert len(scheduler.spawned) == 1
+    assert generation.references == 1
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
+@pytest.mark.parametrize("limit", [0, 1, 2])
+def test_accept_ready_preserves_admission_bound(limit) -> None:
+    transport = FakeTransport()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53, 54)
+    ]
+    server = GatewayServer(
+        App(),
+        config=GatewayConfig(admission=AdmissionLimits(max_connections=limit)),
+        transport=transport,
+        scheduler=FakeScheduler(),
+    )
+    server.start()
+    server.accept_ready()
+    assert len(server.connections) == limit
+    assert server.lifecycle.metrics.get("connections_active") == limit
+    if limit:
+        assert server.accept_ready() == 1
+    assert len(transport.closed) == 1
+    assert server.lifecycle.metrics.get("connections_rejected") == 1
+    for connection in list(server.connections):
+        connection.close("test")
+        server._connection_finished(connection)
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
 def test_listener_admission_rejects_before_spawn() -> None:
     transport = FakeTransport()
     scheduler = FakeScheduler()
