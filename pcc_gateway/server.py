@@ -2917,9 +2917,13 @@ class GatewayServer:
         outcome, fd, client_ip, generation = self._accept_pending(listener_fd)
         if outcome != 1:
             return outcome
-        return virtual_thread.call(
-            self._start_accepted_connection, fd, client_ip, generation
-        )
+        pending = [(fd, client_ip, generation)]
+        try:
+            return virtual_thread.call(self._start_accepted_connection, pending, 0)
+        finally:
+            owner = pending[0]
+            if owner is not None:
+                self._discard_accepted_connection(owner[0], owner[2])
 
     def accept_ready(self, listener_fd: int = -1) -> int:
         """Drain ready sockets before initializing their HTTP/TLS sessions.
@@ -2953,20 +2957,19 @@ class GatewayServer:
             while transferred < len(pending):
                 if self.lifecycle.state != STATE_RUNNING:
                     break
-                fd, client_ip, generation = pending[transferred]
-                # The callee owns cleanup even if construction or spawn fails.
-                transferred += 1
                 virtual_thread.call(
-                    self._start_accepted_connection, fd, client_ip, generation
+                    self._start_accepted_connection, pending, transferred
                 )
+                transferred += 1
             return progress
         finally:
             # Cancellation, drain, or a failed session must not strand the
             # sockets which have left the kernel queue but have no task yet.
             while transferred < len(pending):
-                fd, client_ip, generation = pending[transferred]
+                owner = pending[transferred]
                 transferred += 1
-                self._discard_accepted_connection(fd, generation)
+                if owner is not None:
+                    self._discard_accepted_connection(owner[0], owner[2])
 
     def _discard_accepted_connection(self, fd: int, generation) -> None:
         # Every release is independent; preserve the initiating failure even
@@ -3013,10 +3016,15 @@ class GatewayServer:
             self.generation_lock.release()
         return 1, fd, client_ip, generation
 
-    def _start_accepted_connection(self, fd: int, client_ip: str, generation) -> int:
+    def _start_accepted_connection(self, pending, index: int) -> int:
+        fd, client_ip, generation = pending[index]
         self.generation_lock.acquire()
         tls_channel = None
         try:
+            # Claim only after entering the continuation's cleanup region.
+            # Closing an unstarted continuation never runs its body/finally;
+            # the caller must still own that socket until this point.
+            pending[index] = None
             connection_resolver = self.resolver
             if isinstance(connection_resolver, LazySystemResolver):
                 connection_resolver = connection_resolver.fork()
@@ -3043,7 +3051,7 @@ class GatewayServer:
                 connection_resolver,
                 connection_dns_transport,
             )
-        except Exception:
+        except BaseException:
             # Construction has not published the connection, so this block
             # owns every partially acquired resource.  Provider callbacks are
             # independent failure boundaries: one broken close must never
@@ -3071,7 +3079,7 @@ class GatewayServer:
             connection.vthread = self.scheduler.spawn_connection(
                 self, connection
             )
-        except Exception as error:
+        except BaseException as error:
             spawn_error = error
         if spawn_error is None:
             self.connections_lock.acquire()

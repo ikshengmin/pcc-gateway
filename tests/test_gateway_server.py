@@ -1706,6 +1706,43 @@ def test_accept_ready_failure_releases_unstarted_sockets(monkeypatch) -> None:
     assert server.lifecycle.metrics.get("connections_active") == 0
 
 
+@pytest.mark.parametrize("entry", ["accept_once", "accept_ready"])
+@pytest.mark.parametrize("cancel_at", ["before-start", "construction", "spawn"])
+def test_accept_cancellation_releases_unclaimed_and_claimed_sockets(
+    monkeypatch, entry, cancel_at,
+) -> None:
+    transport = FakeTransport()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53)
+    ]
+    scheduler = FakeScheduler()
+    server = GatewayServer(App(), transport=transport, scheduler=scheduler)
+    server.start()
+    generation = server.lifecycle.current
+
+    def cancelled(*args, **kwargs):
+        raise GeneratorExit()
+
+    if cancel_at == "construction":
+        monkeypatch.setattr(gateway_server_module, "GatewayConnection", cancelled)
+    elif cancel_at == "spawn":
+        monkeypatch.setattr(scheduler, "spawn_connection", cancelled)
+    else:
+        def call(fn, *args):
+            if fn == server._start_accepted_connection:
+                raise GeneratorExit()
+            return fn(*args)
+
+        monkeypatch.setattr(virtual_thread, "call", call)
+    with pytest.raises(GeneratorExit):
+        getattr(server, entry)()
+    assert transport.closed == ([52] if entry == "accept_once" else [52, 53])
+    assert server.connections == []
+    assert server.connection_owners == []
+    assert generation.references == 1
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
 def test_accept_ready_drain_releases_batch_without_spawning() -> None:
     class DrainingTransport(FakeTransport):
         def accept(self, listener_fd: int):
