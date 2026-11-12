@@ -1835,6 +1835,8 @@ def test_native_accept_initializes_only_when_connection_task_runs(monkeypatch):
     assert server.lifecycle.current.references == 1
     scheduler.outcome_value = virtual_thread.OUTCOME_RETURNED
     assert server._reap_connection_owners() == (True, None)
+    assert owner.vthread is None
+    assert owner.connection.vthread is None
 
 
 def test_unstarted_connection_cancellation_releases_socket_after_terminal():

@@ -3308,6 +3308,9 @@ class GatewayServer:
                     if connection in self.connection_owners:
                         self.connection_owners.remove(connection)
                         connection.vthread = None
+                        if isinstance(connection, _AcceptedSocketOwner):
+                            if connection.connection is not None:
+                                connection.connection.vthread = None
             finally:
                 self.connections_lock.release()
         return len(self._connection_owner_snapshot()) == 0, first_error
