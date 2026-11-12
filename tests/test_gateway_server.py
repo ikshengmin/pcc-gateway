@@ -1792,6 +1792,146 @@ def test_accept_ready_preserves_admission_bound(limit) -> None:
     assert server.lifecycle.metrics.get("connections_active") == 0
 
 
+class DeferredScheduler(FakeScheduler):
+    defer_connection_initialization = True
+
+    def spawn_accepted(self, server, owner):
+        self.spawned.append(("accepted", server, owner))
+        return len(self.spawned)
+
+
+def _deferred_server():
+    transport = FakeTransport()
+    transport.accepts = [(PCC_SOCKET_PROGRESS, 52, "10.0.0.8")]
+    scheduler = DeferredScheduler()
+    server = GatewayServer(App(), transport=transport, scheduler=scheduler)
+    server.start()
+    return server, transport, scheduler
+
+
+def test_native_accept_initializes_only_when_connection_task_runs(monkeypatch):
+    server, transport, scheduler = _deferred_server()
+    constructed = []
+
+    def construct(*args, **kwargs):
+        constructed.append(args[1])
+        return GatewayConnection(*args, **kwargs)
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", construct)
+    monkeypatch.setattr(
+        gateway_server_module, "_run_gateway_connection",
+        lambda connection: connection.close("test"),
+    )
+    assert server.accept_ready() == 1
+    assert constructed == []
+    assert server.connections == []
+    assert server.lifecycle.metrics.get("connections_active") == 1
+    owner = server.connection_owners[0]
+    gateway_server_module._gateway_accepted_entry(server, owner)
+    assert constructed == [52]
+    assert transport.closed == [52]
+    assert owner.connection.vthread == owner.vthread
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert server.lifecycle.current.references == 1
+    scheduler.outcome_value = virtual_thread.OUTCOME_RETURNED
+    assert server._reap_connection_owners() == (True, None)
+
+
+def test_unstarted_connection_cancellation_releases_socket_after_terminal():
+    server, transport, scheduler = _deferred_server()
+    server.accept_ready()
+    assert server._reap_connection_owners() == (False, None)
+    assert transport.closed == []
+    scheduler.outcome_value = virtual_thread.OUTCOME_CANCELLED
+    assert server._reap_connection_owners() == (True, None)
+    assert server._reap_connection_owners() == (True, None)
+    assert transport.closed == [52]
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert server.lifecycle.current.references == 1
+
+
+@pytest.mark.parametrize("failure", [RuntimeError, GeneratorExit])
+def test_deferred_construction_failure_releases_connection_owners(monkeypatch, failure):
+    server, transport, scheduler = _deferred_server()
+    server.accept_ready()
+    owner = server.connection_owners[0]
+
+    def construct(*args, **kwargs):
+        raise failure()
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", construct)
+    with pytest.raises(failure):
+        gateway_server_module._gateway_accepted_entry(server, owner)
+    scheduler.outcome_value = virtual_thread.OUTCOME_RAISED
+    assert server._reap_connection_owners() == (True, None)
+    assert transport.closed == [52]
+    assert server.connections == []
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert server.lifecycle.current.references == 1
+
+
+@pytest.mark.parametrize("during_initialization", [False, True])
+def test_deferred_connection_observes_drain_before_serving(monkeypatch, during_initialization):
+    server, transport, scheduler = _deferred_server()
+    server.accept_ready()
+    owner = server.connection_owners[0]
+
+    def construct(*args, **kwargs):
+        assert during_initialization
+        server.request_stop()
+        return GatewayConnection(*args, **kwargs)
+
+    def forbidden(connection):
+        raise AssertionError("connection served after drain")
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", construct)
+    monkeypatch.setattr(gateway_server_module, "_run_gateway_connection", forbidden)
+    if not during_initialization:
+        server.request_stop()
+    gateway_server_module._gateway_accepted_entry(server, owner)
+    scheduler.outcome_value = virtual_thread.OUTCOME_RETURNED
+    assert server._reap_connection_owners() == (True, None)
+    assert transport.closed == [52]
+    assert server.connections == []
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert server.lifecycle.current.references == 1
+
+
+def test_deferred_spawn_failure_releases_whole_pending_batch(monkeypatch):
+    server, transport, scheduler = _deferred_server()
+    transport.accepts.append((PCC_SOCKET_PROGRESS, 53, "10.0.0.9"))
+
+    def fail_spawn(server, owner):
+        raise RuntimeError("spawn failed")
+
+    monkeypatch.setattr(scheduler, "spawn_accepted", fail_spawn)
+    with pytest.raises(RuntimeError, match="spawn failed"):
+        server.accept_ready()
+    assert transport.closed == [52, 53]
+    assert server.connection_owners == []
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert server.lifecycle.current.references == 1
+
+
+def test_deferred_task_can_initialize_before_spawn_returns(monkeypatch):
+    server, transport, scheduler = _deferred_server()
+
+    def start_immediately(server, owner):
+        server._initialize_accepted_owner(owner)
+        return 42
+
+    monkeypatch.setattr(scheduler, "spawn_accepted", start_immediately)
+    server.accept_ready()
+    owner = server.connection_owners[0]
+    assert owner.vthread == owner.connection.vthread == 42
+    owner.connection.close("test")
+    server._connection_finished(owner.connection)
+    scheduler.outcome_value = virtual_thread.OUTCOME_RETURNED
+    assert server._reap_connection_owners() == (True, None)
+    assert transport.closed == [52]
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
 def test_listener_admission_rejects_before_spawn() -> None:
     transport = FakeTransport()
     scheduler = FakeScheduler()

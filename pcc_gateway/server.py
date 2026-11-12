@@ -333,6 +333,35 @@ def _gateway_connection_entry(server, connection) -> None:
         virtual_thread.call(server._connection_finished, connection)
 
 
+class _AcceptedSocketOwner:
+    """Admission and socket owner before a connection task begins."""
+
+    def __init__(self, record) -> None:
+        self.pending = [record]
+        self.connection = None
+        self.vthread = None
+
+
+def _gateway_accepted_entry(server, owner) -> None:
+    connection = None
+    try:
+        if server.lifecycle.state != STATE_RUNNING:
+            return
+        connection = virtual_thread.call(server._initialize_accepted_owner, owner)
+        # Publication precedes this check: shutdown either sees the connection
+        # in its snapshot, or this task observes the drain and closes it itself.
+        if server.lifecycle.state != STATE_RUNNING:
+            virtual_thread.call(connection.close, "gateway-drain")
+            return
+        _run_gateway_connection(connection)
+    finally:
+        try:
+            if connection is not None:
+                virtual_thread.call(server._connection_finished, connection)
+        finally:
+            virtual_thread.call(server._release_accepted_owner, owner)
+
+
 def _gateway_local_handler_entry(connection: GatewayConnection, request):
     """Closed spawn target for one open-world pcc_gateway.web dispatch callback."""
     return virtual_thread.call(connection.app.dispatch, request)
@@ -340,6 +369,8 @@ def _gateway_local_handler_entry(connection: GatewayConnection, request):
 
 class NativeVirtualThreadScheduler:
     """Concrete spawn sites keep pcc1 continuation analysis closed-world."""
+
+    defer_connection_initialization = True
 
     def start(self, carrier_count: int) -> int:
         return virtual_thread.carrier_pool_start(carrier_count)
@@ -352,6 +383,9 @@ class NativeVirtualThreadScheduler:
 
     def spawn_connection(self, server, connection):
         return virtual_thread.spawn(_gateway_connection_entry, server, connection)
+
+    def spawn_accepted(self, server, owner):
+        return virtual_thread.spawn(_gateway_accepted_entry, server, owner)
 
     def cancel(self, thread) -> bool:
         return virtual_thread.cancel(thread)
@@ -2787,6 +2821,9 @@ class GatewayServer:
         self.resolver = resolver
         self.dns_transport = dns_transport
         self.scheduler = scheduler
+        self.defer_connection_initialization = getattr(
+            scheduler, "defer_connection_initialization", False
+        )
         self.hooks = hooks
         if process_control is None:
             process_control = GatewayProcessControl()
@@ -2957,9 +2994,14 @@ class GatewayServer:
             while transferred < len(pending):
                 if self.lifecycle.state != STATE_RUNNING:
                     break
-                virtual_thread.call(
-                    self._start_accepted_connection, pending, transferred
-                )
+                if self.defer_connection_initialization:
+                    virtual_thread.call(
+                        self._queue_accepted_connection, pending, transferred
+                    )
+                else:
+                    virtual_thread.call(
+                        self._start_accepted_connection, pending, transferred
+                    )
                 transferred += 1
             return progress
         finally:
@@ -3016,7 +3058,46 @@ class GatewayServer:
             self.generation_lock.release()
         return 1, fd, client_ip, generation
 
-    def _start_accepted_connection(self, pending, index: int) -> int:
+    def _queue_accepted_connection(self, pending, index: int) -> int:
+        owner = _AcceptedSocketOwner(pending[index])
+        try:
+            pending[index] = None
+            thread = self.scheduler.spawn_accepted(self, owner)
+        except BaseException:
+            self._release_accepted_owner(owner)
+            raise
+        # The task may start on another carrier before spawn returns. Publish
+        # both handle views under the same lock used by initialization.
+        self.connections_lock.acquire()
+        try:
+            owner.vthread = thread
+            if owner.connection is not None:
+                owner.connection.vthread = thread
+            self.connection_owners.append(owner)
+        finally:
+            self.connections_lock.release()
+        return 1
+
+    def _release_accepted_owner(self, owner) -> None:
+        record = owner.pending[0]
+        if record is not None:
+            owner.pending[0] = None
+            self._discard_accepted_connection(record[0], record[2])
+
+    def _initialize_accepted_owner(self, owner):
+        connection = virtual_thread.call(
+            self._construct_accepted_connection, owner.pending, 0
+        )
+        self.connections_lock.acquire()
+        try:
+            owner.connection = connection
+            connection.vthread = owner.vthread
+            self.connections.append(connection)
+        finally:
+            self.connections_lock.release()
+        return connection
+
+    def _construct_accepted_connection(self, pending, index: int):
         fd, client_ip, generation = pending[index]
         self.generation_lock.acquire()
         tls_channel = None
@@ -3065,6 +3146,13 @@ class GatewayServer:
             raise
         finally:
             self.generation_lock.release()
+        return connection
+
+    def _start_accepted_connection(self, pending, index: int) -> int:
+        connection = virtual_thread.call(
+            self._construct_accepted_connection, pending, index
+        )
+        generation = connection.generation
         self.connections_lock.acquire()
         try:
             self.connections.append(connection)
@@ -3207,6 +3295,11 @@ class GatewayServer:
                     )
                 continue
             terminal.append(connection)
+            if isinstance(connection, _AcceptedSocketOwner):
+                # An unstarted cancelled task never enters its finally block.
+                # Terminal outcome is the barrier after which the reaper owns
+                # the still-unclaimed socket; never close a live task's fd.
+                self._release_accepted_owner(connection)
 
         if terminal:
             self.connections_lock.acquire()
