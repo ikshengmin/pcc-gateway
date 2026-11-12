@@ -3084,7 +3084,7 @@ class GatewayServer:
             owner.pending[0] = None
             self._discard_accepted_connection(record[0], record[2])
 
-    def _initialize_accepted_owner(self, owner):
+    def _initialize_accepted_owner(self, owner) -> GatewayConnection:
         connection = virtual_thread.call(
             self._construct_accepted_connection, owner.pending, 0
         )
@@ -3097,7 +3097,7 @@ class GatewayServer:
             self.connections_lock.release()
         return connection
 
-    def _construct_accepted_connection(self, pending, index: int):
+    def _construct_accepted_connection(self, pending, index: int) -> GatewayConnection:
         fd, client_ip, generation = pending[index]
         self.generation_lock.acquire()
         tls_channel = None
@@ -3187,7 +3187,7 @@ class GatewayServer:
             # owned resource.  One failing provider callback must not strand
             # the admission counter or socket owner.
             try:
-                connection.close("spawn-failed")
+                virtual_thread.call(connection.close, "spawn-failed")
             except Exception:
                 pass
             try:
