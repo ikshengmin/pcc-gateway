@@ -33,8 +33,15 @@ uv run python ../pcc/benchmarks/webserver.py --output "$EVIDENCE/mac-comparison"
   --threads 3
 ```
 
-Build the Mac executable using the frozen-source command below without
-`--target`. The core entry provides the performance lock, process-tree watchdog,
+Build from the current core checkout with its normal entry:
+
+```sh
+uv run pcc --backend self ../pcc-gateway/web_frameworks_app.py \
+  -o "$EVIDENCE/web-frameworks-macos"
+```
+
+Record that command under the existing build watchdog. The core measurement
+entry provides the performance lock, process-tree watchdog,
 2400-second limit and 2 GiB measurement-tree cap. Select the actual reference
 Python and dependency versions explicitly; they are recorded in the report.
 
@@ -79,16 +86,12 @@ not submissions to or rankings against the published dashboard.
 
 ## Reproduce
 
-Build the application from a frozen PCC source snapshot using the owned self
-backend, an isolated matching threaded runtime, and a process-tree watchdog.
-For a Docker arm64 guest, the application compiler command is:
+Use the current PCC checkout, the owned self backend and the process-tree
+watchdog. For a Docker arm64 guest, run this from the core checkout:
 
 ```sh
-PCC_NO_AUTO_PCC1=1 PCC_WITH_THREADS=1 PCC_RUNTIME_BUILD=owned \
-PCC_SOURCE_ROOT="$PCC_SOURCE" PCC_REPO_ROOT="$PCC_SOURCE" \
-PCC_RUNTIME_DIR="$PCC_SOURCE/pcc/runtime" PYTHONPATH="$PCC_SOURCE" \
-uv run python -m pcc --backend self --target=aarch64-unknown-linux-gnu \
-  web_frameworks_app.py -o "$EVIDENCE/web-frameworks-linux"
+uv run pcc --backend self --target=aarch64-unknown-linux-gnu \
+  ../pcc-gateway/web_frameworks_app.py -o "$EVIDENCE/web-frameworks-linux"
 ```
 
 Use `x86_64-unknown-linux-gnu` for an x86-64 guest. Retain the compiler command,
@@ -119,6 +122,32 @@ The runner removes only its uniquely named containers, including on failure.
 Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
+
+### Latest same-Mac retry — C512 remains blocked (2026-11-13)
+
+Gateway `c2ca245`, compiled by the current core checkout at `bd81bf994` with
+`uv run pcc --backend self`, builds and executes on Apple M2 Max / macOS 27.2.1.
+This is host-pcc0/self evidence, not native-pcc1 or fixed-point qualification.
+The gateway changes drain ready accepts, move session initialization to the
+connection task, and retain socket/admission/generation ownership through
+cancellation and drain. The focused server/streaming selection is **103 passed**.
+
+The original C512 comparison still fails its concurrent dynamic-ID preflight,
+before any of the planned 30 timed rows. **There is no valid new C512 QPS.**
+Basic HTTP, upstream RSpec and 1,001-request connection recycling pass. The
+same preflight fails under GC0–4; changing collector, shortening the carrier
+ready batch, waiting after warmup, or experimentally forcing an I/O scheduling
+edge did not resolve it. These runtime experiments were not published changes.
+
+The unchanged aiohttp 3.14.5 / CPython 3.14.7 control passes the original
+preflight. Native also passes when all 512 connections are established before
+two concurrent dynamic-ID requests per connection, but fails when requests
+overlap continued connection establishment. That barrier is diagnostic only;
+it does not replace the original gate. Five sampled native bursts lose 115–220
+clients during connection establishment. The root cause remains unresolved.
+Work stopped at the requested ten-round limit. Full suites/bootstrap and live
+TLS qualification were not run. Raw diagnostics remain outside Git; the older
+accepted measurements below describe their recorded sources only.
 
 ### Accepted same-Mac single-carrier baseline
 
