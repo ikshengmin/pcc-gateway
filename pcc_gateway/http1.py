@@ -110,28 +110,12 @@ def _contains_bad_value_byte(data: bytes) -> bool:
     return False
 
 
-def _find_double_crlf(data: bytearray) -> int:
-    index = 0
-    limit = len(data) - 3
-    while index < limit:
-        if (
-            data[index] == 13
-            and data[index + 1] == 10
-            and data[index + 2] == 13
-            and data[index + 3] == 10
-        ):
-            return index
-        index += 1
-    return -1
+def _find_double_crlf(data: bytearray, start: int = 0) -> int:
+    return data.find(b"\r\n\r\n", start)
 
 
-def _find_crlf(data: bytearray) -> int:
-    index = 0
-    while index + 1 < len(data):
-        if data[index] == 13 and data[index + 1] == 10:
-            return index
-        index += 1
-    return -1
+def _find_crlf(data: bytearray, start: int = 0) -> int:
+    return data.find(b"\r\n", start)
 
 
 def _split_commas(value: str):
@@ -327,12 +311,16 @@ class Http1ServerCodec:
         self.state = "HEAD"
         self.remaining = 0
         self.body_received = 0
+        self._separator_scan_from = 0
+        self._request_line_seen = False
         self.closed = False
 
     def _reset_message(self) -> None:
         self.state = "HEAD"
         self.remaining = 0
         self.body_received = 0
+        self._separator_scan_from = 0
+        self._request_line_seen = False
 
     def _parse_head(self, block: bytes):
         lines: list[bytes] = block.split(b"\r\n")
@@ -464,18 +452,25 @@ class Http1ServerCodec:
         completed_messages = 0
         while True:
             if self.state == "HEAD":
-                marker = _find_double_crlf(self.buffer)
+                marker = _find_double_crlf(self.buffer, self._separator_scan_from)
                 if marker < 0:
                     if len(self.buffer) > self.max_header_bytes:
                         raise Http1Error(431, "headers-too-large", "header byte limit exceeded")
-                    line_end = _find_crlf(self.buffer)
-                    if line_end < 0 and len(self.buffer) > self.max_request_line:
-                        raise Http1Error(414, "request-line-too-long", "request line limit exceeded")
+                    if not self._request_line_seen:
+                        line_end = _find_crlf(self.buffer, self._separator_scan_from)
+                        if line_end >= 0:
+                            self._request_line_seen = True
+                        elif len(self.buffer) > self.max_request_line:
+                            raise Http1Error(414, "request-line-too-long", "request line limit exceeded")
+                    # Only a delimiter spanning the next fragment can start
+                    # in bytes already examined. Keep its three-byte overlap.
+                    self._separator_scan_from = max(0, len(self.buffer) - 3)
                     break
                 if marker + 4 > self.max_header_bytes:
                     raise Http1Error(431, "headers-too-large", "header byte limit exceeded")
                 block = bytes(self.buffer[:marker])
                 del self.buffer[:marker + 4]
+                self._separator_scan_from = 0
                 head, has_body = self._parse_head(block)
                 events.append(head)
                 if not has_body:
@@ -507,15 +502,17 @@ class Http1ServerCodec:
                 break
 
             elif self.state == "CHUNK_SIZE":
-                marker = _find_crlf(self.buffer)
+                marker = _find_crlf(self.buffer, self._separator_scan_from)
                 if marker < 0:
                     if len(self.buffer) > 128:
                         raise Http1Error(400, "chunk-line-too-long", "chunk-size line limit exceeded")
+                    self._separator_scan_from = max(0, len(self.buffer) - 1)
                     break
                 if marker > 128:
                     raise Http1Error(400, "chunk-line-too-long", "chunk-size line limit exceeded")
                 raw_line = bytes(self.buffer[:marker])
                 del self.buffer[:marker + 2]
+                self._separator_scan_from = 0
                 size = _parse_chunk_size_line(raw_line)
                 if size > self.max_chunk_bytes:
                     raise Http1Error(413, "chunk-too-large", "chunk size limit exceeded")
@@ -548,10 +545,11 @@ class Http1ServerCodec:
                     if max_messages > 0 and completed_messages >= max_messages:
                         break
                     continue
-                marker = _find_double_crlf(self.buffer)
+                marker = _find_double_crlf(self.buffer, self._separator_scan_from)
                 if marker < 0:
                     if len(self.buffer) > self.max_header_bytes:
                         raise Http1Error(431, "trailers-too-large", "trailer byte limit exceeded")
+                    self._separator_scan_from = max(0, len(self.buffer) - 3)
                     break
                 if marker + 4 > self.max_header_bytes:
                     raise Http1Error(

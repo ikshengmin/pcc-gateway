@@ -457,3 +457,48 @@ def test_oversized_decimal_length_stays_inside_http_error_boundary(length, monke
     assert error.value.code == "body-too-large"
     assert len(created) == 1
     assert created[0].released and created[0].release_calls == 1
+
+
+@pytest.mark.parametrize("fragment_size", [1, 2, 3, 7, 31])
+def test_incremental_delimiters_reset_across_chunks_trailers_and_pipeline(fragment_size):
+    codec = Http1ServerCodec()
+    payload = (
+        b"POST /upload HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
+        b"3;name=value\r\nabc\r\n0\r\nX-Tail: yes\r\n\r\n"
+        b"GET /next HTTP/1.1\r\nHost: x\r\n\r\n"
+    )
+    events = []
+    for offset in range(0, len(payload), fragment_size):
+        events.extend(codec.feed(payload[offset:offset + fragment_size]))
+    assert [event.target for event in events if isinstance(event, RequestHead)] == ["/upload", "/next"]
+    bodies = [event for event in events if isinstance(event, BodyChunk)]
+    assert b"".join(event.data for event in bodies) == b"abc"
+    for event in bodies:
+        event.release()
+    ends = [event for event in events if isinstance(event, RequestEnd)]
+    assert len(ends) == 2 and ends[0].trailers == [("x-tail", "yes")]
+    assert codec.buffer == bytearray()
+
+
+def test_fragmented_header_search_visits_only_a_linear_byte_window(monkeypatch):
+    original = http1_module._find_double_crlf
+    windows = []
+    def counted(data, start=0):
+        windows.append(max(0, len(data) - start))
+        return original(data, start)
+    monkeypatch.setattr(http1_module, "_find_double_crlf", counted)
+    payload = b"GET / HTTP/1.1\r\nHost: x\r\nX-Value: " + b"a" * 2048 + b"\r\n\r\n"
+    codec = Http1ServerCodec()
+    events = []
+    for byte in payload:
+        events.extend(codec.feed(bytes([byte])))
+    assert len(events) == 2 and events[0].header("x-value") == "a" * 2048
+    assert sum(windows) <= 4 * len(payload)
+
+
+def test_fragmented_request_line_still_enforces_its_limit():
+    codec = Http1ServerCodec(max_request_line=16)
+    with pytest.raises(Http1Error) as error:
+        for byte in b"GET /abcdefghijklmnop HTTP/1.1\r\nHost: x\r\n\r\n":
+            codec.feed(bytes([byte]))
+    assert error.value.status == 414
