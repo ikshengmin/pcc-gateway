@@ -1938,6 +1938,7 @@ def test_reaper_preserves_value_equal_live_owner_and_new_publication():
     class Owner:
         def __init__(self, thread):
             self.vthread = thread
+            self._server_owner_index = -1
 
         def __eq__(self, other):
             return isinstance(other, Owner)
@@ -1948,11 +1949,14 @@ def test_reaper_preserves_value_equal_live_owner_and_new_publication():
         def outcome(self, thread):
             if thread == "done":
                 server.connection_owners.append(appended)
+                appended._server_owner_index = len(server.connection_owners) - 1
                 return virtual_thread.OUTCOME_RETURNED
             return virtual_thread.OUTCOME_PENDING
 
     server = GatewayServer(App(), transport=FakeTransport(), scheduler=PublishingScheduler())
     server.connection_owners = [live, done]
+    live._server_owner_index = 0
+    done._server_owner_index = 1
     ledger = server.connection_owners
     assert server._reap_connection_owners() == (False, None)
     assert server.connection_owners is ledger
@@ -1968,6 +1972,7 @@ def test_reaper_releases_terminal_handle_outside_connections_lock():
     class Owner:
         def __init__(self):
             self.handle = "done"
+            self._server_owner_index = 0
 
         @property
         def vthread(self):
@@ -1984,6 +1989,49 @@ def test_reaper_releases_terminal_handle_outside_connections_lock():
     assert server._reap_connection_owners() == (True, None)
     assert owner.vthread is None
     assert server.connection_owners == []
+
+
+@pytest.mark.parametrize("count", [64, 256, 1024])
+def test_task_owner_retirement_does_not_partition_under_publication_lock(count):
+    class Owner:
+        def __init__(self, index):
+            self.vthread = index + 1
+            self._server_owner_index = index
+
+        def __eq__(self, other):
+            raise AssertionError("owner retirement must use identity")
+
+    class Ledger(list):
+        iterations = 0
+        operations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            return super().__iter__()
+
+        def __getitem__(self, index):
+            self.operations += 1
+            return super().__getitem__(index)
+
+        def __setitem__(self, index, value):
+            assert not isinstance(index, slice), "no bulk rewrite under the lock"
+            self.operations += 1
+            return super().__setitem__(index, value)
+
+        def pop(self):
+            self.operations += 1
+            return super().pop()
+
+    server = GatewayServer(App(), transport=FakeTransport(), scheduler=FakeScheduler())
+    server.scheduler.outcome_value = virtual_thread.OUTCOME_RETURNED
+    owners = [Owner(index) for index in range(count)]
+    ledger = Ledger(owners)
+    server.connection_owners = ledger
+    assert server._reap_connection_owners() == (True, None)
+    assert server.connection_owners is ledger and not ledger
+    assert ledger.iterations == 1  # Snapshot only; no second locked partition.
+    assert ledger.operations <= 3 * count
+    assert all(owner.vthread is None and owner._server_owner_index == -1 for owner in owners)
 
 
 def test_connection_finish_removes_exact_value_equal_connection(monkeypatch):

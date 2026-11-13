@@ -340,6 +340,7 @@ class _AcceptedSocketOwner:
         self.pending = [record]
         self.connection = None
         self.vthread = None
+        self._server_owner_index = -1
 
 
 def _gateway_accepted_entry(server, owner) -> None:
@@ -440,6 +441,7 @@ class GatewayConnection:
         # Only the server's connection ledger owns this position. Snapshots
         # retain their objects independently; removal does not scan the ledger.
         self._server_connection_index = -1
+        self._server_owner_index = -1
         self.transport = transport
         self.lifecycle = lifecycle
         self.generation = generation
@@ -3028,16 +3030,7 @@ class GatewayServer:
                     except BaseException:
                         virtual_thread.call(self._release_accepted_owner, task_owner)
                         raise
-                    # Initialization may race spawn on another carrier. Both
-                    # views of the handle share this publication lock.
-                    self.connections_lock.acquire()
-                    try:
-                        task_owner.vthread = thread
-                        if task_owner.connection is not None:
-                            task_owner.connection.vthread = thread
-                        self.connection_owners.append(task_owner)
-                    finally:
-                        self.connections_lock.release()
+                    self._publish_accepted_handle(task_owner, thread)
                 else:
                     virtual_thread.call(
                         self._start_accepted_connection, pending, transferred
@@ -3164,11 +3157,7 @@ class GatewayServer:
         except BaseException as error:
             spawn_error = error
         if spawn_error is None:
-            self.connections_lock.acquire()
-            try:
-                self.connection_owners.append(connection)
-            finally:
-                self.connections_lock.release()
+            self._publish_connection_owner(connection)
         else:
             self.connections_lock.acquire()
             try:
@@ -3197,6 +3186,54 @@ class GatewayServer:
 
     def _accept_loop(self) -> None:
         _gateway_accept_entry(self)
+
+    def _append_connection_owner_locked(self, owner) -> None:
+        index = len(self.connection_owners)
+        self.connection_owners.append(owner)
+        owner._server_owner_index = index
+
+    def _publish_accepted_handle(self, owner, thread) -> None:
+        """Publish bounded metadata without parking the accept continuation.
+
+        A normal helper keeps this short Lock acquire synchronous. Parking the
+        listener here puts its lock wakeup behind ordinary ready work. No task
+        body, provider or resource cleanup runs while the lock is held.
+        """
+        self.connections_lock.acquire()
+        try:
+            # Initialization may race spawn on another carrier. Both views of
+            # the handle share this publication transaction.
+            owner.vthread = thread
+            if owner.connection is not None:
+                owner.connection.vthread = thread
+            self._append_connection_owner_locked(owner)
+        finally:
+            self.connections_lock.release()
+
+    def _publish_connection_owner(self, owner) -> None:
+        self.connections_lock.acquire()
+        try:
+            self._append_connection_owner_locked(owner)
+        finally:
+            self.connections_lock.release()
+
+    def _retire_connection_owner(self, owner) -> bool:
+        """Detach one exact terminal owner in a bounded metadata transaction."""
+        self.connections_lock.acquire()
+        try:
+            index = owner._server_owner_index
+            if index < 0 or index >= len(self.connection_owners):
+                return False
+            if self.connection_owners[index] is not owner:
+                return False
+            last = self.connection_owners.pop()
+            if last is not owner:
+                self.connection_owners[index] = last
+                last._server_owner_index = index
+            owner._server_owner_index = -1
+            return True
+        finally:
+            self.connections_lock.release()
 
     def _detach_connection_locked(self, connection) -> bool:
         """Remove an exact owner in O(1); the caller holds connections_lock.
@@ -3312,29 +3349,12 @@ class GatewayServer:
                 # the still-unclaimed socket; never close a live task's fd.
                 self._release_accepted_owner(connection)
 
-        if terminal:
-            # Ownership is identity-based: equality can match another live
-            # connection, and some user-defined owners are unhashable.
-            terminal_ids = set()
-            for connection in terminal:
-                terminal_ids.add(id(connection))
-            retired = []
-            self.connections_lock.acquire()
-            try:
-                remaining = []
-                # Use the live ledger, preserving owners appended after the
-                # snapshot. One pass avoids repeated scans and list shifts.
-                for connection in self.connection_owners:
-                    if id(connection) in terminal_ids:
-                        retired.append(connection)
-                    else:
-                        remaining.append(connection)
-                self.connection_owners[:] = remaining
-            finally:
-                self.connections_lock.release()
-            # Terminal tasks can retain whole continuation/frame graphs. Drop
-            # those references after releasing the lock needed by new accepts.
-            for connection in retired:
+        # A whole-ledger Python partition under connections_lock can park the
+        # accept owner for a bulk retirement. Each detach is now O(1), keeps
+        # the list object and any later publication, and uses identity only.
+        for connection in terminal:
+            if self._retire_connection_owner(connection):
+                # Drop terminal frame graphs outside the publication lock.
                 connection.vthread = None
                 if isinstance(connection, _AcceptedSocketOwner):
                     if connection.connection is not None:
