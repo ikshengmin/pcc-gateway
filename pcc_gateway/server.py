@@ -3320,7 +3320,7 @@ class GatewayServer:
                         retired.append(connection)
                     else:
                         remaining.append(connection)
-                self.connection_owners = remaining
+                self.connection_owners[:] = remaining
             finally:
                 self.connections_lock.release()
             # Terminal tasks can retain whole continuation/frame graphs. Drop

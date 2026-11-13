@@ -1953,7 +1953,9 @@ def test_reaper_preserves_value_equal_live_owner_and_new_publication():
 
     server = GatewayServer(App(), transport=FakeTransport(), scheduler=PublishingScheduler())
     server.connection_owners = [live, done]
+    ledger = server.connection_owners
     assert server._reap_connection_owners() == (False, None)
+    assert server.connection_owners is ledger
     assert [id(owner) for owner in server.connection_owners] == [id(live), id(appended)]
     assert live.vthread == "live"
     assert done.vthread is None
