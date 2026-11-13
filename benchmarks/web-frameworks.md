@@ -125,6 +125,54 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ### Latest same-Mac retry — C512 remains blocked (2026-11-13)
 
+The fourth authorized batch stopped after five rounds. It first synchronized
+the current core to `298453e29` and rebuilt with ordinary `uv run pcc --backend
+self`; the original C512 comparison still failed. The final artifact uses
+gateway `72fe5ef` and a build started at core `cfa9366c2`, including recorded
+uncommitted changes. Core backend and Rust files changed during compilation,
+so this receipt identifies the executed artifact rather than a single stable
+source revision. Binary SHA-256 is
+`c863375cd3828f99d3f099d4c01550402ecff4c5c31d5d88e7237b1bc812b5d0`.
+
+The final original RSpec, connection-recycling and C512 concurrent-ID gates
+pass. `GET /` has zero errors and **3,767.7 requests/s** as one timed sample.
+The next dynamic GET has **107 connect, 1 read and 1,029 write errors**. Only
+**1 of 30** planned rows is accepted: **there is still no accepted complete
+current QPS comparison or leaderboard rank.** This is one carrier, GC0, local
+Apple M2 Max / macOS 27.2.1 evidence. There is no isolated throughput A/B claim.
+
+The new evidence distinguishes failures before application acceptance from
+closing an already accepted socket. In one instrumented transition, all 376
+failed clients had no matching server `accept`. Another capture reports
+listener readiness at about 38 ms but does not accept until about 160 ms;
+a separate queue observation finds the ready listener behind 258 I/O owners.
+Old READ wakeups can turn into disconnect cleanup after being queued. External
+C interposition is diagnostic only and is absent from the final measurement.
+
+Published changes are split by owner:
+
+- Core `0b5030034` services the oldest and newest I/O-ready owners alternately,
+  with constant-time links, rooted nodes and the unchanged ordinary-work
+  budget. `8823f8154` updates the pool model with allocation bounds. **54**
+  focused model checks pass. An external C ABI reference executes the owned
+  scheduler on GC0–4 at 64/256/1,024 queued owners, checking prompt fresh/oldest
+  service and root retirement. It is not a native-pcc1 qualification.
+- Gateway `72fe5ef` makes connection retirement constant time with a checked
+  position and last-owner swap. Failed-spawn rollback removes the exact owner
+  and avoids releasing admission twice if the task already completed.
+  **114** server/streaming checks pass, including bounded cohort retirement
+  and value-equal connection ownership.
+
+After the core change, one 512-client diagnostic burst passes and dispatches
+the listener about 0.14 ms after readiness. That does not replace the original
+zrk test: its mixed batches still showed 35–75 ms delays before the final
+gateway change, and the final unchanged comparison above remains failed.
+The remaining C512 failure is unresolved. Full suites, bootstrap and live TLS
+are unrun. An additional hot-layout selection hit the unchanged 1-GiB guard;
+the failure is retained and its recorded children were confirmed gone.
+
+### Third five-round retry
+
 The third user-authorized batch stopped after five rounds. Gateway `5527492`
 keeps accepted-socket admission and task publication in one resumable batch,
 including cancellation cleanup before task transfer and close-then-raise
