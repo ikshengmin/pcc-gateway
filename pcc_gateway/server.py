@@ -437,6 +437,9 @@ class GatewayConnection:
             hooks = GatewayHooks()
         self.app = app
         self.fd = fd
+        # Only the server's connection ledger owns this position. Snapshots
+        # retain their objects independently; removal does not scan the ledger.
+        self._server_connection_index = -1
         self.transport = transport
         self.lifecycle = lifecycle
         self.generation = generation
@@ -3082,6 +3085,7 @@ class GatewayServer:
             owner.connection = connection
             connection.vthread = owner.vthread
             self.connections.append(connection)
+            connection._server_connection_index = len(self.connections) - 1
         finally:
             self.connections_lock.release()
         return connection
@@ -3145,6 +3149,7 @@ class GatewayServer:
         self.connections_lock.acquire()
         try:
             self.connections.append(connection)
+            connection._server_connection_index = len(self.connections) - 1
         finally:
             self.connections_lock.release()
         spawn_error = None
@@ -3167,8 +3172,7 @@ class GatewayServer:
         else:
             self.connections_lock.acquire()
             try:
-                if connection in self.connections:
-                    self.connections.remove(connection)
+                removed = self._detach_connection_locked(connection)
             finally:
                 self.connections_lock.release()
         if spawn_error is not None:
@@ -3179,29 +3183,45 @@ class GatewayServer:
                 virtual_thread.call(connection.close, "spawn-failed")
             except Exception:
                 pass
-            try:
-                generation.release()
-            except Exception:
-                pass
-            try:
-                self.lifecycle.release_connection()
-            except Exception:
-                pass
+            if removed:
+                try:
+                    generation.release()
+                except Exception:
+                    pass
+                try:
+                    self.lifecycle.release_connection()
+                except Exception:
+                    pass
             raise spawn_error
         return 1
 
     def _accept_loop(self) -> None:
         _gateway_accept_entry(self)
 
+    def _detach_connection_locked(self, connection) -> bool:
+        """Remove an exact owner in O(1); the caller holds connections_lock.
+
+        Connection iteration has no ordering contract. Keep the list object
+        and fill the removed slot with its last owner, updating that owner's
+        position before releasing the lock. Task retirement has its separate
+        ledger and terminal-outcome barrier.
+        """
+        index = connection._server_connection_index
+        if index < 0 or index >= len(self.connections):
+            return False
+        if self.connections[index] is not connection:
+            return False
+        last = self.connections.pop()
+        if last is not connection:
+            self.connections[index] = last
+            last._server_connection_index = index
+        connection._server_connection_index = -1
+        return True
+
     def _connection_finished(self, connection) -> None:
-        removed = False
         self.connections_lock.acquire()
         try:
-            for index in range(len(self.connections)):
-                if self.connections[index] is connection:
-                    del self.connections[index]
-                    removed = True
-                    break
+            removed = self._detach_connection_locked(connection)
         finally:
             self.connections_lock.release()
         if not removed:

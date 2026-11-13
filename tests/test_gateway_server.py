@@ -2010,6 +2010,103 @@ def test_connection_finish_removes_exact_value_equal_connection(monkeypatch):
     server.app.shutdown()
 
 
+@pytest.mark.parametrize("count", [64, 256, 1024])
+def test_connection_cohort_retirement_has_bounded_ledger_work(count):
+    class CountedLedger(list):
+        operations = 0
+
+        def __getitem__(self, index):
+            self.operations += 1
+            return super().__getitem__(index)
+
+        def __setitem__(self, index, value):
+            self.operations += 1
+            return super().__setitem__(index, value)
+
+        def pop(self):
+            self.operations += 1
+            return super().pop()
+
+        def __delitem__(self, index):
+            raise AssertionError("retirement must not shift the remaining cohort")
+
+    transport = FakeTransport()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, 100 + index, "10.0.0.8") for index in range(count)
+    ]
+    server = GatewayServer(App(), transport=transport, scheduler=FakeScheduler())
+    server.start()
+    assert server.accept_ready() == 1
+    snapshot = list(server.connections)
+    ledger = CountedLedger(snapshot)
+    server.connections = ledger
+    for connection in snapshot:
+        connection.close("test")
+        server._connection_finished(connection)
+        server._connection_finished(connection)
+    assert server.connections is ledger and not ledger
+    assert ledger.operations <= 3 * count
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert all(connection._server_connection_index == -1 for connection in snapshot)
+    server.app.shutdown()
+
+
+def test_spawn_failure_keeps_other_value_equal_connection(monkeypatch):
+    class EqualConnection(GatewayConnection):
+        def __eq__(self, other):
+            return isinstance(other, EqualConnection)
+
+    class FailSecond(FakeScheduler):
+        def spawn_connection(self, server, connection):
+            if connection.fd == 53:
+                raise RuntimeError("spawn failed")
+            return super().spawn_connection(server, connection)
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", EqualConnection)
+    transport = FakeTransport()
+    transport.accepts = [(PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53)]
+    server = GatewayServer(App(), transport=transport, scheduler=FailSecond())
+    server.start()
+    assert server.accept_once() == 1
+    first = server.connections[0]
+    with pytest.raises(RuntimeError, match="spawn failed"):
+        server.accept_once()
+    assert len(server.connections) == 1 and server.connections[0] is first
+    assert not first.closed and transport.closed == [53]
+    assert server.lifecycle.metrics.get("connections_active") == 1
+    first.close("test")
+    server._connection_finished(first)
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    server.app.shutdown()
+
+
+def test_spawn_failure_after_completion_does_not_release_admission_twice(monkeypatch):
+    class FinishThenFail(FakeScheduler):
+        def spawn_connection(self, server, connection):
+            connection.close("test")
+            server._connection_finished(connection)
+            raise RuntimeError("spawn publication failed")
+
+    transport = FakeTransport()
+    transport.accepts = [(PCC_SOCKET_PROGRESS, 52, "10.0.0.8")]
+    server = GatewayServer(App(), transport=transport, scheduler=FinishThenFail())
+    server.start()
+    release_calls = []
+    original_release = server.lifecycle.release_connection
+
+    def counted_release():
+        release_calls.append(True)
+        return original_release()
+
+    monkeypatch.setattr(server.lifecycle, "release_connection", counted_release)
+    with pytest.raises(RuntimeError, match="spawn publication failed"):
+        server.accept_once()
+    assert server.connections == [] and transport.closed == [52]
+    assert release_calls == [True]
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    server.app.shutdown()
+
+
 @pytest.mark.parametrize("entry", ["accept_once", "accept_ready"])
 def test_generation_capture_cancellation_closes_admitted_socket(monkeypatch, entry):
     server, transport, scheduler = _deferred_server()
