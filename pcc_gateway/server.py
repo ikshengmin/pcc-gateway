@@ -2951,53 +2951,90 @@ class GatewayServer:
             raise
 
     def accept_once(self, listener_fd: int = -1) -> int:
-        outcome, fd, client_ip, generation = self._accept_pending(listener_fd)
-        if outcome != 1:
-            return outcome
-        pending = [(fd, client_ip, generation)]
-        try:
-            return virtual_thread.call(self._start_accepted_connection, pending, 0)
-        finally:
-            owner = pending[0]
-            if owner is not None:
-                self._discard_accepted_connection(owner[0], owner[2])
+        return virtual_thread.call(self._accept_batch, listener_fd, True)
 
     def accept_ready(self, listener_fd: int = -1) -> int:
-        """Drain ready sockets before initializing their HTTP/TLS sessions.
+        return virtual_thread.call(self._accept_batch, listener_fd, False)
 
-        The accept continuation owns this bounded batch until each socket is
-        transferred to its connection task. Admission and generation references
-        are acquired immediately, so reload and shutdown retain the same owners.
+    def _accept_batch(self, listener_fd: int, single: bool) -> int:
+        """Own admission and publication in one resumable batch.
+
+        No per-socket continuation is needed merely to acquire a generation or
+        publish a task. Slow cleanup can still park through explicit calls.
         """
+        if listener_fd < 0:
+            listener_fd = self.listener_fd
+        limit = self.config.admission.max_connections
+        if single or limit < 1:
+            limit = 1
         pending = []
         transferred = 0
         progress = 0
         try:
-            # Admission bounds retained sockets. Stop on a rejection too, so a
-            # full server never spins indefinitely accepting and closing peers.
-            while len(pending) < self.config.admission.max_connections:
-                outcome, fd, client_ip, generation = self._accept_pending(
-                    listener_fd
-                )
-                if outcome == 0:
+            while len(pending) < limit:
+                if (
+                    listener_fd < 0 or listener_fd != self.listener_fd
+                    or self.lifecycle.state != STATE_RUNNING
+                ):
                     break
+                outcome, fd, client_ip = self.transport.accept(listener_fd)
+                if outcome == PCC_SOCKET_WOULD_BLOCK:
+                    break
+                if outcome != PCC_SOCKET_PROGRESS or fd < 0:
+                    raise GatewayTransportError("socket accept observation failed")
+                socket_owned = True
+                admitted = False
+                generation = None
+                try:
+                    if not self.lifecycle.admit_connection():
+                        # A close callback may raise after closing the fd.
+                        # Transfer before invoking it to avoid a double close.
+                        socket_owned = False
+                        virtual_thread.call(self.transport.close, fd)
+                        progress = 1
+                        if single or self.config.admission.max_connections == 0:
+                            progress = -1
+                        break
+                    admitted = True
+                    self.generation_lock.acquire()
+                    try:
+                        generation = self.lifecycle.acquire_generation()
+                    finally:
+                        self.generation_lock.release()
+                    pending.append((fd, client_ip, generation))
+                    socket_owned = False
+                except BaseException:
+                    if socket_owned:
+                        if admitted:
+                            virtual_thread.call(self._discard_accepted_connection, fd, generation)
+                        else:
+                            try:
+                                virtual_thread.call(self.transport.close, fd)
+                            except BaseException:
+                                pass
+                    raise
                 progress = 1
-                if outcome < 0:
-                    break
-                pending.append((fd, client_ip, generation))
-            # A zero connection limit must still accept and reject one peer.
-            if self.config.admission.max_connections == 0:
-                outcome, fd, client_ip, generation = self._accept_pending(
-                    listener_fd
-                )
-                progress = outcome
             while transferred < len(pending):
                 if self.lifecycle.state != STATE_RUNNING:
                     break
-                if self.defer_connection_initialization:
-                    virtual_thread.call(
-                        self._queue_accepted_connection, pending, transferred
-                    )
+                if self.defer_connection_initialization and not single:
+                    task_owner = _AcceptedSocketOwner(pending[transferred])
+                    try:
+                        pending[transferred] = None
+                        thread = self.scheduler.spawn_accepted(self, task_owner)
+                    except BaseException:
+                        virtual_thread.call(self._release_accepted_owner, task_owner)
+                        raise
+                    # Initialization may race spawn on another carrier. Both
+                    # views of the handle share this publication lock.
+                    self.connections_lock.acquire()
+                    try:
+                        task_owner.vthread = thread
+                        if task_owner.connection is not None:
+                            task_owner.connection.vthread = thread
+                        self.connection_owners.append(task_owner)
+                    finally:
+                        self.connections_lock.release()
                 else:
                     virtual_thread.call(
                         self._start_accepted_connection, pending, transferred
@@ -3029,54 +3066,6 @@ class GatewayServer:
             virtual_thread.call(self.transport.close, fd)
         except Exception:
             pass
-
-    def _accept_pending(self, listener_fd: int):
-        if listener_fd < 0:
-            listener_fd = self.listener_fd
-        if (
-            listener_fd < 0
-            or listener_fd != self.listener_fd
-            or self.lifecycle.state != STATE_RUNNING
-        ):
-            return 0, -1, "", None
-        outcome, fd, client_ip = self.transport.accept(listener_fd)
-        if outcome == PCC_SOCKET_WOULD_BLOCK:
-            return 0, -1, "", None
-        if outcome != PCC_SOCKET_PROGRESS or fd < 0:
-            raise GatewayTransportError("socket accept observation failed")
-        if not self.lifecycle.admit_connection():
-            virtual_thread.call(self.transport.close, fd)
-            return -1, -1, "", None
-        self.generation_lock.acquire()
-        generation = None
-        try:
-            generation = self.lifecycle.acquire_generation()
-        except Exception:
-            self._discard_accepted_connection(fd, generation)
-            raise
-        finally:
-            self.generation_lock.release()
-        return 1, fd, client_ip, generation
-
-    def _queue_accepted_connection(self, pending, index: int) -> int:
-        owner = _AcceptedSocketOwner(pending[index])
-        try:
-            pending[index] = None
-            thread = self.scheduler.spawn_accepted(self, owner)
-        except BaseException:
-            self._release_accepted_owner(owner)
-            raise
-        # The task may start on another carrier before spawn returns. Publish
-        # both handle views under the same lock used by initialization.
-        self.connections_lock.acquire()
-        try:
-            owner.vthread = thread
-            if owner.connection is not None:
-                owner.connection.vthread = thread
-            self.connection_owners.append(owner)
-        finally:
-            self.connections_lock.release()
-        return 1
 
     def _release_accepted_owner(self, owner) -> None:
         record = owner.pending[0]

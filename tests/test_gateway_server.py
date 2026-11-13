@@ -2010,6 +2010,37 @@ def test_connection_finish_removes_exact_value_equal_connection(monkeypatch):
     server.app.shutdown()
 
 
+@pytest.mark.parametrize("entry", ["accept_once", "accept_ready"])
+def test_generation_capture_cancellation_closes_admitted_socket(monkeypatch, entry):
+    server, transport, scheduler = _deferred_server()
+
+    def interrupted():
+        raise GeneratorExit()
+
+    monkeypatch.setattr(server.lifecycle, "acquire_generation", interrupted)
+    with pytest.raises(GeneratorExit):
+        getattr(server, entry)()
+    assert transport.closed == [52]
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    assert server.lifecycle.current.references == 1
+    assert server.connection_owners == []
+
+
+def test_rejected_close_failure_is_not_closed_again(monkeypatch):
+    server, transport, scheduler = _deferred_server()
+    monkeypatch.setattr(server.lifecycle, "admit_connection", lambda: False)
+
+    def close(fd):
+        transport.closed.append(fd)
+        raise RuntimeError("close failed after releasing fd")
+
+    monkeypatch.setattr(transport, "close", close)
+    with pytest.raises(RuntimeError, match="close failed"):
+        server.accept_ready()
+    assert transport.closed == [52]
+    assert server.lifecycle.metrics.get("connections_active") == 0
+
+
 def test_listener_admission_rejects_before_spawn() -> None:
     transport = FakeTransport()
     scheduler = FakeScheduler()
