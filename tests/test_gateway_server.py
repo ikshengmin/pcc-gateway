@@ -819,6 +819,26 @@ def test_partial_request_deadline_cancels_and_returns_408() -> None:
     lifecycle.release_connection()
 
 
+@pytest.mark.parametrize("partial", [b"GET", b"GET / HTTP/1.1\r\nHost: local\r\n"])
+def test_partial_head_scan_keeps_the_original_header_deadline(partial):
+    hooks = RecordingHooks()
+    transport = FakeTransport()
+    config = GatewayConfig(http1=Http1Limits(idle_timeout_ms=100, header_timeout_ms=5))
+    transport.reads = [
+        (PCC_SOCKET_PROGRESS, partial),
+        (PCC_SOCKET_WOULD_BLOCK, b""),
+        (PCC_SOCKET_WOULD_BLOCK, b""),
+    ]
+    app = App(routes=(get("/", lambda request: "never"),))
+    connection, lifecycle, generation = _connection(app, config, transport, hooks)
+    connection.run()
+    assert b"HTTP/1.1 408 " in bytes(transport.written)
+    assert ("deadline", "header") in hooks.events
+    assert lifecycle.metrics.get("requests_active") == 0
+    generation.release()
+    lifecycle.release_connection()
+
+
 def test_proxy_plan_fails_closed_without_outgoing_transport() -> None:
     upstream = UpstreamGroup(
         "backend", (UpstreamEndpoint("127.0.0.1", 9000),)

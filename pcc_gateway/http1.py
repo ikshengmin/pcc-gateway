@@ -464,28 +464,25 @@ class Http1ServerCodec:
         completed_messages = 0
         while True:
             if self.state == "HEAD":
-                scan_from = self._separator_scan_from
-                marker = _find_double_crlf(self.buffer, scan_from)
+                marker = _find_double_crlf(self.buffer)
                 if marker < 0:
+                    if len(self.buffer) == 0:
+                        break
                     if len(self.buffer) > self.max_header_bytes:
                         raise Http1Error(431, "headers-too-large", "header byte limit exceeded")
-                    if len(self.buffer) > self.max_request_line and not self._request_line_seen:
-                        line_end = _find_crlf(self.buffer)
-                        if line_end >= 0:
-                            self._request_line_seen = True
-                        else:
-                            raise Http1Error(414, "request-line-too-long", "request line limit exceeded")
+                    line_end = _find_crlf(self.buffer)
+                    if line_end < 0 and len(self.buffer) > self.max_request_line:
+                        raise Http1Error(414, "request-line-too-long", "request line limit exceeded")
+                    self._request_line_seen = line_end >= 0
                     # Only a delimiter spanning the next fragment can start
                     # in bytes already examined. Keep its three-byte overlap.
                     self._separator_scan_from = max(0, len(self.buffer) - 3)
+                    self.state = "HEAD_PARTIAL"
                     break
                 if marker + 4 > self.max_header_bytes:
                     raise Http1Error(431, "headers-too-large", "header byte limit exceeded")
                 block = bytes(self.buffer[:marker])
                 del self.buffer[:marker + 4]
-                if scan_from != 0:
-                    self._separator_scan_from = 0
-                    self._request_line_seen = False
                 head, has_body = self._parse_head(block)
                 events.append(head)
                 if not has_body:
@@ -494,6 +491,27 @@ class Http1ServerCodec:
                     if max_messages > 0 and completed_messages >= max_messages:
                         break
                     continue
+
+            elif self.state == "HEAD_PARTIAL":
+                marker = _find_double_crlf(self.buffer, self._separator_scan_from)
+                if marker < 0:
+                    if len(self.buffer) > self.max_header_bytes:
+                        raise Http1Error(431, "headers-too-large", "header byte limit exceeded")
+                    if not self._request_line_seen:
+                        line_end = _find_crlf(self.buffer, self._separator_scan_from)
+                        if line_end >= 0:
+                            self._request_line_seen = True
+                        elif len(self.buffer) > self.max_request_line:
+                            raise Http1Error(414, "request-line-too-long", "request line limit exceeded")
+                    self._separator_scan_from = max(0, len(self.buffer) - 3)
+                    break
+                # Re-enter the ordinary complete-head path once. That final
+                # full scan keeps total fragmented work linear and keeps all
+                # cursor reads and writes off complete-input requests.
+                self._separator_scan_from = 0
+                self._request_line_seen = False
+                self.state = "HEAD"
+                continue
 
             elif self.state == "FIXED_BODY":
                 if len(self.buffer) == 0:

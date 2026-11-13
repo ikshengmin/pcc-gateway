@@ -1185,7 +1185,7 @@ class GatewayConnection:
                     handled += 1
             if (
                 self.current_request is None
-                and self.codec.state == "HEAD"
+                and (self.codec.state == "HEAD" or self.codec.state == "HEAD_PARTIAL")
                 and len(self.codec.buffer) > 0
                 and self.header_deadline_ms < 0
             ):

@@ -493,7 +493,8 @@ def test_fragmented_header_search_visits_only_a_linear_byte_window(monkeypatch):
     for byte in payload:
         events.extend(codec.feed(bytes([byte])))
     assert len(events) == 2 and events[0].header("x-value") == "a" * 2048
-    assert sum(windows) <= 4 * len(payload)
+    # Four-byte fragment windows plus one final complete-head scan.
+    assert sum(windows) <= 5 * len(payload)
 
 
 def test_fragmented_request_line_still_enforces_its_limit():
