@@ -515,3 +515,13 @@ def test_long_fragmented_header_does_not_hide_the_next_request_line_limit():
     with pytest.raises(Http1Error) as error:
         codec.feed(b"GET /" + b"b" * 40)
     assert error.value.status == 414
+
+
+def test_complete_headers_do_not_enter_fragment_scan_bookkeeping(monkeypatch):
+    codec = Http1ServerCodec()
+    def unexpected(first):
+        raise AssertionError("complete header entered partial scan")
+    monkeypatch.setattr(codec, "_scan_incomplete_head", unexpected)
+    events = codec.feed(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+    assert len(events) == 2
+    assert codec.feed(b"") == []
