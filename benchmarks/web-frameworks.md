@@ -125,6 +125,37 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ### Latest same-Mac retry — C512 remains blocked (2026-11-13)
 
+The second user-authorized ten-round batch has also stopped. Its final artifact
+uses gateway `5d478b9` and a current-directory host-pcc0/self build at core
+`cdfffdea7`, including the recorded uncommitted dependency-closure work. The
+original C512 concurrent-ID preflight still reports connection resets, before
+any of the planned 30 timed rows. **There is no accepted complete current QPS
+comparison.** This is local Apple M2 Max / macOS 27.2.1 evidence, not a published
+leaderboard rank or a native-pcc1 qualification.
+
+Published changes cover bounded I/O scheduling, separating disconnect cleanup
+from the I/O priority queue, exact-identity owner retirement, releasing task
+handles outside the accept lock, and dropping completed task captures only
+after their owning resume and continuation lease end. Gateway server/streaming
+checks are **106 passed**; the final core ownership/model selection is **66
+passed**. A C ABI reference probe executes the capture-lifetime change on all
+five collectors, and five native I/O reference cases pass with `auto` on GC0–4.
+Those reference drivers use external C tooling against the verified owned
+runtime; they do not establish native-pcc1 compiler ownership. They retain six
+pytest workers and the 90-second/1-GiB guard while reusing the freshly built,
+provenance-verified archive. Earlier cold-build memory-limit failures remain
+recorded, not waived or relabeled as passes.
+
+Intermediate candidates produced valid **single** C512 `GET /` rows, including
+3,736 requests/s, but subsequent dynamic-route rows failed. Running the dynamic
+route alone, or adding a diagnostic one-second gap after `GET /`, passed; the
+official comparison retains consecutive routes without that gap. Inspection of
+the pinned upstream `.tasks/config.rake` confirms one warmup followed by
+consecutive route runs. No timing/connection/error criterion was weakened.
+Full suites, bootstrap and live TLS qualification remain unrun.
+
+### Earlier retry boundary
+
 Gateway `c2ca245`, compiled by the current core checkout at `bd81bf994` with
 `uv run pcc --backend self`, builds and executes on Apple M2 Max / macOS 27.2.1.
 This is host-pcc0/self evidence, not native-pcc1 or fixed-point qualification.
