@@ -169,3 +169,41 @@ main()
         )
         assert ran.returncode == 0, "GC" + str(backend) + ": " + ran.stdout + ran.stderr
         assert "PCC1_GATEWAY_BUFFER_OK" in ran.stdout
+
+
+@pytest.mark.parametrize("segment_size", [1, 3, 9])
+@pytest.mark.parametrize("consumed", [0, 1, 3])
+@pytest.mark.parametrize("limit", [-1, 0, 1, 3, 20])
+def test_byte_snapshot_preserves_queue_and_view_ownership(segment_size, consumed, limit):
+    channel = ChannelBuffer(segment_size, 12, 24, 48)
+    payload = b"abcdefghij"
+    channel.append(payload)
+    held = channel.peek_views()
+    channel.consume(consumed)
+    references = [view.owner.references for view in held]
+    result = channel.peek_bytes(limit)
+    expected = payload[consumed:] if limit < 0 else payload[consumed:consumed + limit]
+    assert result == expected
+    assert len(channel) == len(payload) - consumed
+    assert [view.owner.references for view in held] == references
+    channel.close()
+    assert result == expected
+    assert b"".join(view.to_bytes() for view in held) == payload
+    for view in held:
+        view.release()
+
+
+def test_view_byte_copy_checks_its_own_range():
+    owner = BufferSegment(12)
+    owner.write(b"abcdefghij")
+    view = owner.view(2, 5)
+    assert view.to_bytes(1, 3) == b"def"
+    assert view.to_bytes(5) == b""
+    for offset, length in [(-1, 1), (6, 0), (4, 2)]:
+        with pytest.raises(ValueError):
+            view.to_bytes(offset, length)
+    assert owner.references == 2
+    view.release()
+    with pytest.raises(BufferReleasedError):
+        view.to_bytes()
+    owner.release()

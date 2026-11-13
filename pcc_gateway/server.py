@@ -526,12 +526,7 @@ class GatewayConnection:
             self.write_deadline_ms = self.now_ms() + self.config.write_timeout_ms
 
     def peek_output(self, limit: int = -1) -> bytes:
-        views = self.output.peek_views(limit)
-        result = bytearray(b"")
-        for view in views:
-            result.extend(view.to_bytes())
-            view.release()
-        return bytes(result)
+        return self.output.peek_bytes(limit)
 
     def take_output(self, limit: int = -1) -> bytes:
         result = self.peek_output(limit)

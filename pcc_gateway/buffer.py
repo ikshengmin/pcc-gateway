@@ -134,10 +134,17 @@ class BufferView:
             return 0
         return self.length
 
-    def to_bytes(self) -> bytes:
+    def to_bytes(self, offset: int = 0, length: int = -1) -> bytes:
         if self.released:
             raise BufferReleasedError("cannot read a released view")
-        return bytes(self.owner.data[self.start:self.start + self.length])
+        if offset < 0 or offset > self.length:
+            raise ValueError("buffer copy offset is out of range")
+        if length < 0:
+            length = self.length - offset
+        if length < 0 or offset + length > self.length:
+            raise ValueError("buffer copy length is out of range")
+        start = self.start + offset
+        return bytes(self.owner.data[start:start + length])
 
     def slice(self, offset: int = 0, length: int = -1):
         if self.released:
@@ -253,6 +260,34 @@ class ChannelBuffer:
             local_offset = 0
         return result
 
+    def peek_bytes(self, limit: int = -1) -> bytes:
+        """Copy queued bytes without creating retained views or consuming them.
+
+        The queue owns every source view for this synchronous copy. The returned
+        immutable bytes own their storage independently of later queue changes.
+        """
+        remaining = self.queued_bytes
+        if limit >= 0 and limit < remaining:
+            remaining = limit
+        if remaining == 0:
+            return b""
+        index = self.head
+        local_offset = self.head_offset
+        first = self.views[index]
+        if remaining <= len(first) - local_offset:
+            return first.to_bytes(local_offset, remaining)
+        output = bytearray(b"")
+        while index < len(self.views) and remaining > 0:
+            view = self.views[index]
+            take = len(view) - local_offset
+            if take > remaining:
+                take = remaining
+            output.extend(view.to_bytes(local_offset, take))
+            remaining -= take
+            index += 1
+            local_offset = 0
+        return bytes(output)
+
     def consume(self, length: int) -> int:
         """Release consumed owners and return a low-watermark transition."""
         if length < 0 or length > self.queued_bytes:
@@ -278,13 +313,9 @@ class ChannelBuffer:
     def read(self, limit: int = -1) -> bytes:
         if limit < 0 or limit > self.queued_bytes:
             limit = self.queued_bytes
-        parts = self.peek_views(limit)
-        output = bytearray(b"")
-        for part in parts:
-            output.extend(part.to_bytes())
-            part.release()
+        output = self.peek_bytes(limit)
         self.consume(limit)
-        return bytes(output)
+        return output
 
     def close(self) -> int:
         if self.closed:
