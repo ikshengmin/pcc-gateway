@@ -123,7 +123,59 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
-### Latest same-Mac retry — C512 remains blocked (2026-11-13)
+### Accepted same-Mac C512 comparison (2026-11-14)
+
+The original comparison now completes **30/30 timed rows** across five
+alternating native/aiohttp pairs. Every raw row has zero connect, read, write,
+timeout, deadline and HTTP-status errors, and every row is server-bound. All
+ten arms finish their upstream RSpec, connection-recycling, concurrent-ID and
+pre/post HTTP checks. The final run has no injected observation library.
+
+Five-run medians on Apple M2 Max / macOS 27.2.1, C512, three load threads,
+one carrier/event loop and native GC0:
+
+| Route | pcc-gateway QPS | aiohttp QPS | pcc p99 ms | aiohttp p99 ms |
+|---|---:|---:|---:|---:|
+| GET / | 3,893.5 | 28,403.7 | 1,772.0 | 20.6 |
+| GET /user/{id} | 3,569.6 | 25,143.6 | 873.7 | 28.3 |
+| POST /user | 3,817.9 | 27,595.6 | 1,672.7 | 23.5 |
+
+The reference is unchanged upstream aiohttp 3.14.5 on CPython 3.14.7. The native
+rate is 13.7–14.2% of that same-host reference; these figures are not a ranking
+against the public Linux dashboard. Percentiles remain medians of run
+percentiles, not pooled samples.
+
+The accepted artifact is gateway `3fd9910`, built from the current core
+directory with `uv run pcc --backend self` at `91b57a2dd` plus the recorded
+uncommitted dependency-closure change. Input hashes match before and after
+compilation. Binary SHA-256 is
+`a09b26b8d16b7b828a6a37396bc44171841bbfbccaaebd1e49ccc4e0982b3397`.
+Core also changed since the failed baseline, so this is an accepted current
+comparison, not an isolated before/after speedup claim.
+
+The diagnosed path was the accept owner parking on `connections_lock` during
+handle publication while the main thread retired a cohort of old task owners.
+The lock wake moved it into ordinary ready work, leaving pending connections
+unaccepted for about 400 ms in one trace. Matching mutex addresses and native
+stacks identify `_accept_batch` and `_reap_connection_owners` on the two sides.
+
+`3fd9910` keeps handle publication in a short synchronous metadata transaction
+and retires each exact owner with constant-time position/swap removal. The
+whole-ledger Python partition no longer holds the publication lock. The list
+object, concurrent later appends, terminal-outcome barrier and release of task
+graphs outside the lock are retained. Native symbols confirm that the new
+publication and retirement helpers are not resumable frames. **117** focused
+gateway checks pass. No concurrency, backlog, deadline, admission, request-limit
+or error criterion was relaxed.
+
+The supplemental GC1 run confirmed the actual backend by reading its native
+selection state. Basic HTTP and recycling passed, but the concurrent-ID client
+failed in TCP_NODELAY setup with EINVAL. That result remains unresolved;
+GC2–4 were not run after the failure. The accepted throughput comparison is
+GC0 / host-pcc0-self evidence. Full suites, native-pcc1 bootstrap and live TLS
+qualification are unrun. Raw receipts stay outside Git.
+
+### Fifth five-round retry (2026-11-13)
 
 The fifth authorized batch stopped after five rounds. It began by synchronizing
 core `d279c8a77` and rebuilding from the current directory. The final artifact
