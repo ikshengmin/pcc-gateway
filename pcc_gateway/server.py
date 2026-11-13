@@ -5,7 +5,7 @@ The protocol core is deliberately transport-independent: tests and current-
 socket or event-loop implementations.  ``NativeSocketTransport`` is the
 production bridge to pcc's freestanding, nonblocking observation ABI.  Each
 accepted connection is scheduled as one pcc virtual thread and blocking-looking
-waits lower to ``block_current_on_fd``; the underlying carrier is not meant to
+waits lower to ``wait_current_on_fd``; the underlying carrier is not meant to
 block.
 
 This slice owns local HTTP/1 dispatch, TLS listener driving and pcc-owned
@@ -296,8 +296,8 @@ class NativeSocketTransport:
 
 
 def _park_native_fd(fd: int, events: int, timeout_ms: int) -> None:
-    """Compiler-visible park leaf for transitive ``may_park`` analysis."""
-    virtual_thread.block_current_on_fd(fd, events, timeout_ms)
+    """Register readiness after the nonblocking transport reported no progress."""
+    virtual_thread.wait_current_on_fd(fd, events, timeout_ms)
 
 
 def _gateway_accept_entry(server) -> None:
