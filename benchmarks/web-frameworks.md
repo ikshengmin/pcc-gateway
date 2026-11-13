@@ -125,6 +125,50 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ### Latest same-Mac retry — C512 remains blocked (2026-11-13)
 
+The fifth authorized batch stopped after five rounds. It began by synchronizing
+core `d279c8a77` and rebuilding from the current directory. The final artifact
+uses core `18d492149` plus the recorded uncommitted dependency-closure change,
+with gateway `698ba38` (server source `72fe5ef`). Input hashes match before/after
+compilation; no compiler snapshot or copied checkout was selected. Binary
+SHA-256 is `8b990c7d5849d8e4f21cdc865e9e7a0f39856f93078fec7e73e081380eebb1a7`.
+
+The final original RSpec, connection-recycling and C512 concurrent-ID gates
+pass, but the first timed `GET /` has **325 connect and 2,197 write errors**.
+**0 of 30** planned rows are accepted: **there is no valid final QPS or complete
+comparison.** This is one carrier, GC0, local Apple M2 Max / macOS 27.2.1
+evidence. Concurrency, timeouts, backlog, connection limits and error rejection
+remain unchanged. No throughput gain or published ranking is established.
+
+Two core scheduling gaps were reproduced and corrected:
+
+- A short-deadline owner in the middle of two ready cohorts waited for
+  128/512/2,048 dispatches at cohort sizes 64/256/1,024. `395b2d693` retains the
+  existing wait deadline in the rooted ready node and alternates one selected
+  candidate with the oldest FIFO owner. All removal stays constant time;
+  caller deadlines and the ordinary-work share are preserved.
+- A real persistent carrier continued 64 CPU steps after a task introduced a
+  new fd wait. `1ecedd7c6` checks live fd waits before its next ready step while
+  retaining compute-only batching. The native reproducer now sees the fd
+  after one CPU step under every collector.
+
+The final selection is **70 host checks and 3 native reference cases passed**.
+The native cases run single/mixed arrival at all three cohort sizes on GC0–4,
+plus the persistent-carrier scenario on GC0–4. They use external C ABI drivers
+against the verified owned runtime, six pytest workers and the original
+90-second/1-GiB guard. They do not establish native-pcc1 qualification.
+
+The deadline-only intermediate candidate accepted 14 original rows, including
+two complete native route triples, before its third native POST reported
+534 connect, 3 read and 2,541 write errors. A later diagnostic verified the
+actual `listen` backlog of 128 and readiness-to-accept delay at most about
+0.53 ms, but still observed a C512 connection reset and 2–5 ms listener-poll
+intervals. Interposition is diagnostic only and absent from the final run.
+These observations and isolated native passes do not resolve the final C512
+failure. Gateway source is unchanged in this batch. Full suites, bootstrap and
+live TLS qualification remain unrun; raw evidence stays outside Git.
+
+### Fourth five-round retry
+
 The fourth authorized batch stopped after five rounds. It first synchronized
 the current core to `298453e29` and rebuilt with ordinary `uv run pcc --backend
 self`; the original C512 comparison still failed. The final artifact uses
