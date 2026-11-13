@@ -502,3 +502,15 @@ def test_fragmented_request_line_still_enforces_its_limit():
         for byte in b"GET /abcdefghijklmnop HTTP/1.1\r\nHost: x\r\n\r\n":
             codec.feed(bytes([byte]))
     assert error.value.status == 414
+
+
+def test_long_fragmented_header_does_not_hide_the_next_request_line_limit():
+    codec = Http1ServerCodec(max_request_line=32)
+    payload = b"GET / HTTP/1.1\r\nHost: x\r\nX-Value: " + b"a" * 200 + b"\r\n\r\n"
+    events = []
+    for byte in payload:
+        events.extend(codec.feed(bytes([byte])))
+    assert len(events) == 2 and events[0].header("x-value") == "a" * 200
+    with pytest.raises(Http1Error) as error:
+        codec.feed(b"GET /" + b"b" * 40)
+    assert error.value.status == 414
