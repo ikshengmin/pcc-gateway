@@ -125,6 +125,49 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ### Latest same-Mac retry — C512 remains blocked (2026-11-13)
 
+The third user-authorized batch stopped after five rounds. Gateway `5527492`
+keeps accepted-socket admission and task publication in one resumable batch,
+including cancellation cleanup before task transfer and close-then-raise
+ownership. Its server/streaming checks are **109 passed**. The change removes
+per-socket helper continuations; it is not a demonstrated throughput gain.
+
+The final build uses ordinary current-directory `uv run pcc --backend self`
+at core `bc6743593`, including the recorded uncommitted dependency-closure
+work. Compiler and gateway input hashes match before/after compilation. Binary
+SHA-256 is `3dbf74440fa4e0a758f80205694845f4a0e5626b25928fc3b46ac46fe7c484db`.
+The original RSpec, 1,001-request recycling and C512 concurrent-ID checks pass.
+The first timed `GET /` row has zero errors and **1,333.3 requests/s**, but the
+next dynamic GET has **285 connect, 7 read and 115 write errors**. The runner
+rejects it, accepting only **1 of 30** planned rows. **There is no accepted
+complete current QPS comparison or leaderboard rank.** This is one-carrier,
+GC0, local Apple M2 Max / macOS 27.2.1 evidence, not native-pcc1 qualification.
+
+An earlier artifact in this batch recorded 3,767.1 requests/s on `GET /` and
+then failed the dynamic GET with 8 connect, 43 read and 227 write errors.
+Different uncommitted runtime inputs and single samples prevent treating that
+as an A/B performance result. The final run does not renew the older figure.
+
+The bounded diagnostics establish narrower facts:
+
+- The preceding failed artifact reports read errno -54 (ECONNRESET); the eight
+  observed read failures are not EINTR or EBADF. Debugger timing is not QPS
+  evidence and does not identify the initiator of the reset.
+- An independent Python listener actually accepts 8/128/128 queued sockets
+  for requested backlogs 8/128/4,096 with 512 connection attempts. Counting
+  completed client connects alone overstates queue capacity. This establishes
+  the local queue constraint, not the gateway failure's exact cause.
+- A native 512-connection test verifies 4,577 responses. One connection closes
+  at request 1,000 while the other 511 stay open. Connections are established
+  in batches for this counter-isolation diagnostic; it does not replace C512
+  throughput or concurrent-establishment acceptance.
+
+The unresolved failure remains new connection traffic overlapping connection
+admission/cleanup at the route transition. The original consecutive-route
+protocol, timeouts and error rejection remain unchanged. Full suites,
+bootstrap and live TLS qualification are unrun. Raw logs remain outside Git.
+
+### Second ten-round retry
+
 The second user-authorized ten-round batch has also stopped. Its final artifact
 uses gateway `5d478b9` and a current-directory host-pcc0/self build at core
 `cdfffdea7`, including the recorded uncommitted dependency-closure work. The
