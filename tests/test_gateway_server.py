@@ -1934,6 +1934,80 @@ def test_deferred_task_can_initialize_before_spawn_returns(monkeypatch):
     assert server.lifecycle.metrics.get("connections_active") == 0
 
 
+def test_reaper_preserves_value_equal_live_owner_and_new_publication():
+    class Owner:
+        def __init__(self, thread):
+            self.vthread = thread
+
+        def __eq__(self, other):
+            return isinstance(other, Owner)
+
+    live, done, appended = Owner("live"), Owner("done"), Owner("appended")
+
+    class PublishingScheduler(FakeScheduler):
+        def outcome(self, thread):
+            if thread == "done":
+                server.connection_owners.append(appended)
+                return virtual_thread.OUTCOME_RETURNED
+            return virtual_thread.OUTCOME_PENDING
+
+    server = GatewayServer(App(), transport=FakeTransport(), scheduler=PublishingScheduler())
+    server.connection_owners = [live, done]
+    assert server._reap_connection_owners() == (False, None)
+    assert [id(owner) for owner in server.connection_owners] == [id(live), id(appended)]
+    assert live.vthread == "live"
+    assert done.vthread is None
+
+
+def test_reaper_releases_terminal_handle_outside_connections_lock():
+    server = GatewayServer(App(), transport=FakeTransport(), scheduler=FakeScheduler())
+    server.scheduler.outcome_value = virtual_thread.OUTCOME_RETURNED
+
+    class Owner:
+        def __init__(self):
+            self.handle = "done"
+
+        @property
+        def vthread(self):
+            return self.handle
+
+        @vthread.setter
+        def vthread(self, value):
+            assert server.connections_lock.acquire(False), "task release held accept lock"
+            server.connections_lock.release()
+            self.handle = value
+
+    owner = Owner()
+    server.connection_owners = [owner]
+    assert server._reap_connection_owners() == (True, None)
+    assert owner.vthread is None
+    assert server.connection_owners == []
+
+
+def test_connection_finish_removes_exact_value_equal_connection(monkeypatch):
+    class EqualConnection(GatewayConnection):
+        def __eq__(self, other):
+            return isinstance(other, EqualConnection)
+
+    monkeypatch.setattr(gateway_server_module, "GatewayConnection", EqualConnection)
+    transport = FakeTransport()
+    transport.accepts = [
+        (PCC_SOCKET_PROGRESS, fd, "10.0.0.8") for fd in (52, 53)
+    ]
+    server = GatewayServer(App(), transport=transport, scheduler=FakeScheduler())
+    server.start()
+    assert server.accept_once() == server.accept_once() == 1
+    first, second = server.connections
+    second.close("test")
+    server._connection_finished(second)
+    assert len(server.connections) == 1 and server.connections[0] is first
+    assert server.lifecycle.metrics.get("connections_active") == 1
+    first.close("test")
+    server._connection_finished(first)
+    assert server.lifecycle.metrics.get("connections_active") == 0
+    server.app.shutdown()
+
+
 def test_listener_admission_rejects_before_spawn() -> None:
     transport = FakeTransport()
     scheduler = FakeScheduler()

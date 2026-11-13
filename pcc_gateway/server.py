@@ -3208,9 +3208,11 @@ class GatewayServer:
         removed = False
         self.connections_lock.acquire()
         try:
-            if connection in self.connections:
-                self.connections.remove(connection)
-                removed = True
+            for index in range(len(self.connections)):
+                if self.connections[index] is connection:
+                    del self.connections[index]
+                    removed = True
+                    break
         finally:
             self.connections_lock.release()
         if not removed:
@@ -3302,18 +3304,38 @@ class GatewayServer:
                 self._release_accepted_owner(connection)
 
         if terminal:
+            # Ownership is identity-based: equality can match another live
+            # connection, and some user-defined owners are unhashable.
+            terminal_ids = set()
+            for connection in terminal:
+                terminal_ids.add(id(connection))
+            retired = []
             self.connections_lock.acquire()
             try:
-                for connection in terminal:
-                    if connection in self.connection_owners:
-                        self.connection_owners.remove(connection)
-                        connection.vthread = None
-                        if isinstance(connection, _AcceptedSocketOwner):
-                            if connection.connection is not None:
-                                connection.connection.vthread = None
+                remaining = []
+                # Use the live ledger, preserving owners appended after the
+                # snapshot. One pass avoids repeated scans and list shifts.
+                for connection in self.connection_owners:
+                    if id(connection) in terminal_ids:
+                        retired.append(connection)
+                    else:
+                        remaining.append(connection)
+                self.connection_owners = remaining
             finally:
                 self.connections_lock.release()
-        return len(self._connection_owner_snapshot()) == 0, first_error
+            # Terminal tasks can retain whole continuation/frame graphs. Drop
+            # those references after releasing the lock needed by new accepts.
+            for connection in retired:
+                connection.vthread = None
+                if isinstance(connection, _AcceptedSocketOwner):
+                    if connection.connection is not None:
+                        connection.connection.vthread = None
+        self.connections_lock.acquire()
+        try:
+            owners_terminal = len(self.connection_owners) == 0
+        finally:
+            self.connections_lock.release()
+        return owners_terminal, first_error
 
     def reload(self, config: GatewayConfig):
         """Publish a same-listener generation, including TLS certificates."""
