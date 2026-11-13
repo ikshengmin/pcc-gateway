@@ -207,3 +207,42 @@ def test_view_byte_copy_checks_its_own_range():
     with pytest.raises(BufferReleasedError):
         view.to_bytes()
     owner.release()
+
+
+@pytest.mark.parametrize("source", [b"a\x00\xffbcdef", bytearray(b"a\x00\xffbcdef")])
+@pytest.mark.parametrize("offset,length,capacity", [(0, -1, 9), (1, 5, 3), (7, 0, 2)])
+def test_segment_bulk_copy_keeps_capacity_and_exact_bytes(source, offset, length, capacity):
+    owner = BufferSegment(capacity)
+    requested = len(source) - offset if length < 0 else length
+    count = min(requested, capacity)
+    assert owner.write(source, offset, length) == count
+    assert owner.end == count and len(owner.data) == capacity
+    assert bytes(owner.data[:count]) == bytes(source[offset:offset + count])
+    assert bytes(owner.data[count:]) == b"\x00" * (capacity - count)
+    owner.release()
+
+
+def test_segment_self_copy_keeps_forward_indexing_semantics():
+    owner = BufferSegment(8)
+    owner.write(b"ab")
+    assert owner.write(owner.data, 0, 6) == 6
+    assert owner.data == bytearray(b"abababab")
+    owner.release()
+
+
+def test_segment_custom_source_keeps_integer_index_calls():
+    class Indexed:
+        def __init__(self):
+            self.indices = []
+        def __len__(self):
+            return 3
+        def __getitem__(self, index):
+            assert type(index) is int
+            self.indices.append(index)
+            return 65 + index
+    source = Indexed()
+    owner = BufferSegment(4)
+    assert owner.write(source, 1, 2) == 2
+    assert source.indices == [1, 2]
+    assert owner.data == bytearray(b"BC\x00\x00")
+    owner.release()

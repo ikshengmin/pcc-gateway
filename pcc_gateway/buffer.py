@@ -34,7 +34,7 @@ class BufferSegment:
         if capacity <= 0:
             raise ValueError("buffer segment capacity must be positive")
         self.capacity = capacity
-        self.data = bytearray(b"\x00" * capacity)
+        self.data = bytearray(capacity)
         self.start = 0
         self.end = 0
         self.references = 1
@@ -84,10 +84,17 @@ class BufferSegment:
         available = self.writable_bytes()
         if count > available:
             count = available
-        index = 0
-        while index < count:
-            self.data[self.end + index] = source[offset + index]
-            index += 1
+        if type(source) is bytes or (
+            type(source) is bytearray and source is not self.data
+        ):
+            self.data[self.end:self.end + count] = source[offset:offset + count]
+        else:
+            # Preserve indexing hooks and forward-copy behavior when the
+            # source aliases this segment's mutable storage.
+            index = 0
+            while index < count:
+                self.data[self.end + index] = source[offset + index]
+                index += 1
         self.end += count
         return count
 

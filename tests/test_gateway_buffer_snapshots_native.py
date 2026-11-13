@@ -41,6 +41,17 @@ def main():
         raise RuntimeError("view-relative copy")
     view.release()
     owner.release()
+    alias = BufferSegment(8)
+    alias.write(b"ab")
+    if alias.write(alias.data, 0, 6) != 6 or alias.data != bytearray(b"abababab"):
+        raise RuntimeError("forward self copy")
+    alias.release()
+    copied = BufferSegment(4)
+    if copied.write(bytearray(b"x012345"), 1, 5) != 4:
+        raise RuntimeError("truncated mutable copy")
+    if copied.data != bytearray(b"0123"):
+        raise RuntimeError("mutable source bytes")
+    copied.release()
     print("BUFFER_SNAPSHOT_OK")
 main()
 """
