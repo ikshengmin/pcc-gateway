@@ -123,7 +123,65 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
-### Accepted same-Mac C512 comparison (2026-11-14)
+### Five-round optimization result (2026-11-14)
+
+The final same-Mac comparison completes **30/30 timed rows** and all ten server
+arms, with zero connect/read/write/timeout/deadline or HTTP-status errors.
+Every row is server-bound. Original upstream RSpec, 1,001-request connection
+recycling, C512 dynamic-ID verification and pre/post HTTP checks all pass.
+Conditions remain Apple M2 Max / macOS 27.2.1, GC0, one carrier, three load
+threads, 15 seconds per route and five alternating native/aiohttp pairs.
+
+| Route | pcc-gateway QPS | aiohttp QPS | pcc p99 ms | aiohttp p99 ms |
+|---|---:|---:|---:|---:|
+| GET / | 4,425.1 | 29,803.8 | 260.4 | 19.6 |
+| GET /user/{id} | 4,155.7 | 26,450.8 | 263.0 | 22.7 |
+| POST /user | 4,406.1 | 29,252.2 | 251.1 | 19.8 |
+
+The reference remains aiohttp 3.14.5 / CPython 3.14.7. Native throughput is
+**14.8–15.7%** of this same-run reference. This is still a substantial gap;
+component microbenchmarks below are not HTTP throughput multipliers or a
+ranking against the public Linux dashboard.
+
+The artifact uses gateway `fd69cf7da0c409fc17409baa92e019013dde6003`, built with
+current-directory `uv run pcc --backend self` at core
+`9e3df71e3478a2142cd84fffe149a064a38e9601`, including the unchanged, uncommitted
+`pipeline_dependency_closure.py` work. Compiler/application input hashes match
+before and after compilation. Binary SHA-256:
+`a5ac9861182e391f5a8806d7edaadac37484ec6fc86e418cd8225c5a4914e920`.
+This is current-workspace host-pcc0/self evidence, not a clean-tree release or
+native-pcc1/bootstrap qualification.
+
+Five optimization rounds, each with five alternating measurement pairs:
+
+| Round | Decision | Measured boundary |
+|---|---|---|
+| 1 | Keep readiness registration after would-block (`29be85c`; core fd-wait API through `642ccc747`). | Same-compiler, one-call-site native HTTP A/B: QPS +4.1–5.1%, 5/5 wins on each route; p99 971–1,359 ms becomes 262–280 ms. Unchanged CPython loop control differs by 0.3%. |
+| 2 | Keep byte snapshots without temporary retained views (`ef44939`). | Single-thread 64-byte buffer append/read loop: GC0–4 improve 21%, 24%, 24%, 27%, 63%, each 5/5; unchanged write control -0.5%. |
+| 3 | Keep bulk copying of exact bytes/bytearray, preserving self-alias and custom-index behavior (`aa90d49`). | Segment construction/write loop: 2.5–3.4x across GC0–4, each 5/5. CPython loop control varies 2.7%; n/4n/16n work remains linear. |
+| 4 | Keep incremental scanning in the separate incomplete-head path (through `fd69cf7`). | Final A/B uses the same source pathname/module identity. GC0 complete-head parsing +1.1% is not a meaningful throughput gain; other collectors show no measured regression. Fragmented parsing is about 9x faster, 5/5, with linear n/4n/16n scaling. Earlier variants regressed complete-head parsing and were corrected. Header deadlines still return 408. |
+| 5 | Do not enable `PCC_KNOWN_ROOT_STORES`. | IR actually changes 709 generic root stores to known-root stores, but buffer operation medians are 0.9–2.7% lower with mixed pair wins. No measured gain; compiler defaults and GC protocols stay unchanged. |
+
+The final seven-second CPU capture has 5,507 on-CPU samples and no `poll`
+samples, versus 16.8% in the earlier capture. `pcc_gc_store_root` is now 7.2%
+self / 16.0% inclusive; its children include terminal release/finalization.
+Allocation is 6.8% inclusive. These are attribution samples under separately
+validated load, not an isolated GC-marking percentage or another HTTP score.
+
+Validation: 14 focused core lowering/ABI checks, the fresh runtime I/O waitset
+matrix (15 cases over GC0–4), and the final 170 HTTP/server/streaming host checks
+pass. Buffer host checks passed at their change boundary; emitted buffer and
+fragmented-parser programs match CPython under all five collectors. Heap-bigint
+rebind/argument-owner probes also match CPython with known-root selection both
+off and on. No finalizer, weakref, resurrection, slot traversal or collector
+protocol was changed.
+
+The full HTTP comparison above is **GC0 only**. The previous GC1 concurrent-ID
+client failure (TCP_NODELAY/EINVAL) was not retested; full GC1–4 HTTP and
+four-carrier scaling are unrun for this checkpoint. Full suites, bootstrap and
+live TLS remain unrun. Raw receipts and captured profiles stay outside Git.
+
+### First accepted same-Mac C512 baseline (2026-11-14)
 
 The original comparison now completes **30/30 timed rows** across five
 alternating native/aiohttp pairs. Every raw row has zero connect, read, write,
