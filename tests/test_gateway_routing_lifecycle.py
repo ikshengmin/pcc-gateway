@@ -79,3 +79,45 @@ def test_admission_and_graceful_drain_are_separate_limits() -> None:
     lifecycle.release_connection()
     assert lifecycle.finish_drain()
     assert lifecycle.state == STATE_STOPPED
+
+
+
+def test_router_normalizes_a_plain_target_once_per_match(monkeypatch):
+    import pcc_gateway.routing as routing
+    original = routing.normalize_path
+    calls = []
+    def counted(path):
+        calls.append(path)
+        return original(path)
+    monkeypatch.setattr(routing, "normalize_path", counted)
+    routes = [Route("GET", "/miss" + str(index) + "/{id}", _handler) for index in range(16)]
+    routes.append(Route("GET", "/wanted/{id}", _handler))
+    router = Router(routes)
+    first = router.match("GET", "/wanted//./42?query=value")
+    assert first.params == {"id": "42"}
+    assert calls == ["/wanted//./42"]
+    second = router.match("GET", "/wanted/43")
+    assert second.params == {"id": "43"} and first.params == {"id": "42"}
+    assert len(calls) == 2
+
+
+def test_host_filter_still_precedes_invalid_path_normalization():
+    import pytest
+    from pcc_gateway.routing import RouteNotFound
+    router = Router((Route("GET", "/", _handler, host="expected"),))
+    with pytest.raises(RouteNotFound):
+        router.match("GET", "/../../escape", "different")
+    with pytest.raises(ValueError, match="escapes"):
+        router.match("GET", "/../../escape", "expected")
+
+
+def test_path_subclass_callbacks_are_not_cached_between_candidates():
+    calls = []
+    class Path(str):
+        def split(self, separator=None, maximum=-1):
+            calls.append(str(self))
+            return super().split(separator, maximum)
+    router = Router((Route("GET", "/miss/{id}", _handler),
+                     Route("GET", "/wanted/{id}", _handler)))
+    assert router.match("GET", Path("/wanted/42")).params == {"id": "42"}
+    assert len(calls) == 2

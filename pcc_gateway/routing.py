@@ -177,11 +177,19 @@ def normalize_path(path: str) -> str:
     return "/" + "/".join(output)
 
 
-def _match_segments(route: Route, path: str):
+def _path_values(path: str):
     normalized = normalize_path(path)
     values = normalized.split("/")[1:]
     if values == [""]:
         values = []
+    return values
+
+
+def _match_segments(route: Route, path: str):
+    return _match_values(route, _path_values(path))
+
+
+def _match_values(route: Route, values: list[str]):
     params = {}
     value_index = 0
     for kind, expected in route.segments:
@@ -238,10 +246,19 @@ class Router:
         wanted_method = method.upper()
         wanted_host = _normalize_host(host)
         allowed = []
+        values = None
+        cacheable = type(path) is str
         for route in self.routes:
             if route.host and route.host != wanted_host:
                 continue
-            params = _match_segments(route, path)
+            if cacheable:
+                # Normalize lazily, after host filtering, and only once for
+                # this match. Keep subclass callbacks on their original path.
+                if values is None:
+                    values = _path_values(path)
+                params = _match_values(route, values)
+            else:
+                params = _match_segments(route, path)
             if params is None:
                 continue
             if route.method == wanted_method or route.method == "*":
