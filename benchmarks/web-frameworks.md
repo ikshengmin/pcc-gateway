@@ -123,6 +123,42 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
+### Two-round result on Apple M1 Pro (2026-11-14)
+
+A second Mac (Apple M1 Pro, 10 cores, macOS 27.2.1) completes the default
+matrix with **30/30 timed rows**, ten server arms, zero zrk errors or non-2xx
+responses on either side and every row server-bound; raw-file hashes match.
+Conditions: GC0, one carrier, three load threads, C512, 15 seconds per route,
+five alternating native/aiohttp pairs. Reference: aiohttp 3.14.5 on CPython
+3.14.10.
+
+| Route | pcc-gateway QPS | aiohttp QPS | pcc p99 ms | aiohttp p99 ms |
+|---|---:|---:|---:|---:|
+| GET / | 4,671.5 | 28,034.1 | 227.1 | 19.5 |
+| GET /user/{id} | 4,513.2 | 25,716.5 | 235.5 | 21.4 |
+| POST /user | 4,509.1 | 27,544.8 | 233.4 | 19.8 |
+
+Native throughput is **16.4–17.5%** of the same-run reference. The executable is
+gateway `4046022` built with current-directory `uv run pcc --backend self` at
+core `ac1d9ccf` (binary SHA-256
+`fd6cc2898268df9cfc529fc8a9a9116c0de931bfa4331ecebd7d58560bc1bc3e`); this is
+host-pcc0/self evidence, not native-pcc1 or bootstrap qualification. Results
+from the M2 Max below are a different host and are not directly comparable.
+
+Each round was a same-host native A/B: GET /, C512, 8-second single-route
+screens (`--screen-route root`), alternating arm order.
+
+| Round | Decision | Measured boundary |
+|---|---|---|
+| 1 | Keep: core `ac1d9ccf` reads the poll request flags monotonic (LDR) instead of acquire (LDAR) on the fast path; the slow path still acquires. | 6 pairs: median 4,359.1 vs 4,236.7 QPS (+2.9%), 4/6 wins, pair spread about ±4%; no unchanged control arm. Entry-poll samples fall from 580 of 4,660 to 500 of 4,340 in-binary samples. |
+| 2 | Keep: gateway `4046022` adopts exact `bytes` within one segment as read-only output storage instead of copying it in and out. | 12 pairs against round 1: median 4,463.6 vs 4,411.7 QPS (+1.2%), 10/12 wins; the second batch of six is +0.6% to +1.6%, 6/6. |
+
+Validation: 73 focused poll/inliner/short-call checks, the native stop-the-world
+hot-loop and owner-poll programs on the rebuilt threaded archive, 300 gateway
+host checks and the emitted buffer program against CPython on GC0–4 pass.
+Full GC1–4 HTTP, four-carrier scaling, whole suites, bootstrap and live TLS
+were not run.
+
 ### Five-round optimization result (2026-11-14)
 
 The final same-Mac comparison completes **30/30 timed rows** and all ten server
