@@ -123,7 +123,7 @@ Raw receipts remain outside Git. Full suites and bootstrap are separate gates.
 
 ## Current boundary
 
-### Two-round result on Apple M1 Pro (2026-11-14)
+### Four-round result on Apple M1 Pro (2026-11-14)
 
 A second Mac (Apple M1 Pro, 10 cores, macOS 27.2.1) completes the default
 matrix with **30/30 timed rows**, ten server arms, zero zrk errors or non-2xx
@@ -132,32 +132,49 @@ Conditions: GC0, one carrier, three load threads, C512, 15 seconds per route,
 five alternating native/aiohttp pairs. Reference: aiohttp 3.14.5 on CPython
 3.14.10.
 
-| Route | pcc-gateway QPS | aiohttp QPS | pcc p99 ms | aiohttp p99 ms |
-|---|---:|---:|---:|---:|
-| GET / | 4,671.5 | 28,034.1 | 227.1 | 19.5 |
-| GET /user/{id} | 4,513.2 | 25,716.5 | 235.5 | 21.4 |
-| POST /user | 4,509.1 | 27,544.8 | 233.4 | 19.8 |
+| Route | pcc-gateway QPS | aiohttp QPS | pcc / aiohttp | pcc p99 ms | aiohttp p99 ms |
+|---|---:|---:|---:|---:|---:|
+| GET / | 4,689.2 | 27,200.2 | 17.2% | 233.4 | 20.9 |
+| GET /user/{id} | 4,550.3 | 24,043.2 | 18.9% | 246.6 | 24.5 |
+| POST /user | 4,548.9 | 26,620.9 | 17.1% | 239.2 | 20.8 |
 
-Native throughput is **16.4–17.5%** of the same-run reference. The executable is
-gateway `4046022` built with current-directory `uv run pcc --backend self` at
-core `ac1d9ccf` (binary SHA-256
-`fd6cc2898268df9cfc529fc8a9a9116c0de931bfa4331ecebd7d58560bc1bc3e`); this is
+After rounds 1–2 the same matrix measured 4,671.5 / 4,513.2 / 4,509.1 QPS
+against aiohttp 28,034.1 / 25,716.5 / 27,544.8 (16.4–17.5%). The unchanged
+aiohttp arm is 3.0–6.5% lower in the later run, so host speed drifted between
+the two matrices; compare ratios, not absolute values, across them.
+
+The executable is gateway `488d0c0` built with current-directory
+`uv run pcc --backend self` at core `6b0f2406` (compiler source identical to
+`8a795a99`; binary SHA-256
+`1b9ad17c6b8ef402cbfdecff8e12d8cfafb0bbe9c2d1348446ee2274e47cce98`). This is
 host-pcc0/self evidence, not native-pcc1 or bootstrap qualification. Results
 from the M2 Max below are a different host and are not directly comparable.
 
-Each round was a same-host native A/B: GET /, C512, 8-second single-route
-screens (`--screen-route root`), alternating arm order.
+Each round was a same-host native A/B against the previous round's binary:
+GET /, C512, 8-second single-route screens (`--screen-route root`),
+alternating arm order and no separate unchanged control arm.
 
 | Round | Decision | Measured boundary |
 |---|---|---|
-| 1 | Keep: core `ac1d9ccf` reads the poll request flags monotonic (LDR) instead of acquire (LDAR) on the fast path; the slow path still acquires. | 6 pairs: median 4,359.1 vs 4,236.7 QPS (+2.9%), 4/6 wins, pair spread about ±4%; no unchanged control arm. Entry-poll samples fall from 580 of 4,660 to 500 of 4,340 in-binary samples. |
-| 2 | Keep: gateway `4046022` adopts exact `bytes` within one segment as read-only output storage instead of copying it in and out. | 12 pairs against round 1: median 4,463.6 vs 4,411.7 QPS (+1.2%), 10/12 wins; the second batch of six is +0.6% to +1.6%, 6/6. |
+| 1 | Keep: core `ac1d9ccf` reads the poll request flags monotonic (LDR) instead of acquire (LDAR) on the fast path; the slow path still acquires. | 6 pairs: median 4,359.1 vs 4,236.7 QPS (+2.9%), 4/6 wins, pair spread about ±4%. Entry-poll samples fall from 580 of 4,660 to 500 of 4,340 in-binary samples. |
+| 2 | Keep: gateway `4046022` adopts exact `bytes` within one segment as read-only output storage instead of copying it in and out. | 12 pairs: median 4,463.6 vs 4,411.7 QPS (+1.2%), 10/12 wins; the second batch of six is +0.6% to +1.6%, 6/6. |
+| 3 | Keep: gateway `488d0c0` reads `GatewayLifecycle.observed_state`, written under the lock with every transition, on per-request keep-alive/drain checks instead of the lock-taking `state` property. The accept publication/drain handshake keeps the locked read. | 6 pairs: median 4,562.8 vs 4,496.6 QPS (+1.5%), 6/6 wins, +0.95% to +2.5%. |
+| 4 | Keep: core `8a795a99` decides dynamic `==`/`!=` with an int operand inline when both words are tagged ints. | 6 pairs: median 4,605.9 vs 4,595.4 QPS (+0.2%), 6/6 wins, +0.1% to +0.9%. The header byte check gains the fast path at all five sites; the profiled ~2% call share did not become throughput. |
+
+The round-2 CPU profile is flat: 547 functions have samples, the largest
+(`pcc_gc_store_root`) is 5.2% and the top ten total 18%. By category,
+ownership (root stores, atomic refcounts, pins, leases) is 24.5%, allocation
+and release 15.6%, Darwin TLV access 6.2%, dynamic dispatch 7.1%, generator
+frames 5.3% and socket syscalls 7.6%. pcc executables share a fixed Mach-O
+UUID, so `sample` can reuse another build's cached symbols; these figures are
+re-symbolicated against the measured binary's own `nm` table.
 
 Validation: 73 focused poll/inliner/short-call checks, the native stop-the-world
-hot-loop and owner-poll programs on the rebuilt threaded archive, 300 gateway
-host checks and the emitted buffer program against CPython on GC0–4 pass.
-Full GC1–4 HTTP, four-carrier scaling, whole suites, bootstrap and live TLS
-were not run.
+hot-loop and owner-poll programs on the rebuilt threaded archive, 323 gateway
+host checks, the emitted buffer program and the extended compare program
+(literal equality with bigints, bools, floats, None, str, user `__eq__` and
+byte iteration) against CPython on GC0–4 pass. Full GC1–4 HTTP, four-carrier
+scaling, whole suites, bootstrap and live TLS were not run.
 
 ### Five-round optimization result (2026-11-14)
 
