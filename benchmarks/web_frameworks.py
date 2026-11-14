@@ -103,9 +103,9 @@ def validate_result(data, method, route, concurrency, duration=15, *, port=3000)
             **{key + "_ms": latencies[key] / 1000 for key in ("p50", "p75", "p90", "p99")}}
 
 
-def summarize(runs, repeats, concurrencies, reference="aiohttp"):
+def summarize(runs, repeats, concurrencies, reference="aiohttp", *, routes=ROUTES):
     result = []
-    for method, route in ROUTES:
+    for method, route in routes:
         for concurrency in concurrencies:
             row = {"method": method, "route": route, "concurrency": concurrency}
             for arm in ("pcc-gateway", reference):

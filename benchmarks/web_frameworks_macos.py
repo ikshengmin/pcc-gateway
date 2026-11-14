@@ -54,6 +54,16 @@ def cpu_seconds(runner, pid):
     return parse_cpu_time(runner.command(["ps", "-p", str(pid), "-o", "time="]))
 
 
+def measurement_plan(screen_route=None):
+    """Default to the full upstream workload; explicitly label a short screen."""
+    if screen_route is None:
+        return ROUTES, 15, "full"
+    selected = {"root": ROUTES[0], "id": ROUTES[1], "post": ROUTES[2]}
+    if screen_route not in selected:
+        raise ValueError("unknown diagnostic route")
+    return (selected[screen_route],), 8, "single-route-screen"
+
+
 def compare(args):
     if sys.platform != "darwin":
         raise RuntimeError("this runner records local Mac evidence only")
@@ -62,6 +72,7 @@ def compare(args):
     runner = Runner(output)
     native = args.native.resolve()
     reference = "native-control" if args.reference_native else "aiohttp"
+    routes, duration, comparison_kind = measurement_plan(getattr(args, "screen_route", None))
     reference_binary = args.reference_native or args.python
     build = json.loads(args.build_receipt.read_text())
     if build.get("status") != "COMPLETE" or build.get("returncode") != 0:
@@ -82,7 +93,9 @@ def compare(args):
     report = {"schema": "pcc-gateway.web-frameworks-macos.v1", "status": "RUNNING",
         "complete": False, "upstream_revision": UPSTREAM_REV, "host": platform.platform(),
         "reference_arm": reference,
-        "inputs": inputs, "runs": [], "arms": [], "duration_seconds": 15,
+        "inputs": inputs, "runs": [], "arms": [], "duration_seconds": duration,
+        "routes": routes, "comparison_kind": comparison_kind,
+        "full_matrix_complete": False,
         "repeats": args.repeats, "concurrencies": args.concurrencies,
         "server_carriers_or_event_loops": 1, "load_threads": args.threads,
         "gc_backend": 0, "cpu_affinity": "unavailable; no CPU pinning on macOS",
@@ -163,19 +176,20 @@ def compare(args):
                     validate_result(json.loads(warmup.read_text()), "GET", "/", 50, 5, port=port)
                     for concurrency in args.concurrencies:
                         verify_concurrent_ids(port, concurrency)
-                        for index, (method, route) in enumerate(ROUTES):
+                        for index, (method, route) in enumerate(routes):
                             name = f"{arm}-{repeat + 1}-c{concurrency}-route{index}"
                             print(name, flush=True)
                             raw = output / (name + ".json")
                             command = zrk_command(method, route, concurrency, args.threads, str(raw),
-                                port=port, script=upstream / ".load_scripts/user_id.lua")
+                                duration=duration, port=port, script=upstream / ".load_scripts/user_id.lua")
                             before_cpu = cpu_seconds(runner, child)
                             before = time.perf_counter()
                             runner.command([str(args.zrk), *command[1:]])
                             wall = time.perf_counter() - before
                             cpu = cpu_seconds(runner, child) - before_cpu
                             busy = cpu / wall
-                            result = validate_result(json.loads(raw.read_text()), method, route, concurrency, port=port)
+                            result = validate_result(json.loads(raw.read_text()), method, route, concurrency,
+                                                     duration, port=port)
                             report["runs"].append({"arm": arm, "repeat": repeat + 1,
                                 "method": method, "route": route, "concurrency": concurrency,
                                 "raw": raw.name, "raw_sha256": digest(raw),
@@ -195,9 +209,11 @@ def compare(args):
             raise ValueError("benchmark inputs changed during the run")
         if any(digest(upstream / name) != value for name, value in report["upstream_files"].items()):
             raise ValueError("upstream inputs changed during the run")
-        report["summary"] = summarize(report["runs"], args.repeats, args.concurrencies, reference)
+        report["summary"] = summarize(report["runs"], args.repeats, args.concurrencies,
+                                      reference, routes=routes)
         report["all_runs_server_bound"] = all(run["saturation"] == "server-bound" for run in report["runs"])
-        report.update(status="COMPLETE", complete=True)
+        report.update(status="COMPLETE", complete=True,
+                      full_matrix_complete=comparison_kind == "full")
     except BaseException as error:
         report.update(status="FAILED", error=type(error).__name__ + ": " + str(error))
         raise
@@ -217,6 +233,8 @@ def main():
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--concurrencies", type=int, nargs="+", default=[10, 64, 256, 512])
     parser.add_argument("--threads", type=int, default=os.cpu_count())
+    parser.add_argument("--screen-route", choices=("root", "id", "post"),
+                        help="8-second single-route diagnostic; never a complete upstream matrix")
     args = parser.parse_args()
     if args.reference_native and not args.reference_build_receipt:
         parser.error("--reference-native requires --reference-build-receipt")

@@ -5,7 +5,7 @@ import copy
 import pytest
 
 from benchmarks.web_frameworks import ROUTES, summarize, validate_result, zrk_command
-from benchmarks.web_frameworks_macos import parse_cpu_time
+from benchmarks.web_frameworks_macos import measurement_plan, parse_cpu_time
 
 
 def result():
@@ -95,3 +95,24 @@ def test_native_control_summary_is_not_mislabeled_as_aiohttp():
     for row in summarize(rows, 1, [10], "native-control"):
         assert row["pcc_over_reference"] == 1.1
         assert "aiohttp" not in row and "pcc_over_aiohttp" not in row
+
+
+def test_diagnostic_routes_do_not_change_the_default_full_workload():
+    assert measurement_plan() == (ROUTES, 15, "full")
+    assert measurement_plan("id") == ((ROUTES[1],), 8, "single-route-screen")
+    with pytest.raises(ValueError, match="unknown"):
+        measurement_plan("missing")
+
+
+def test_screen_summary_requires_every_selected_pair_and_explicit_scope():
+    rows = []
+    for repeat in range(5):
+        for arm in ("pcc-gateway", "native-control"):
+            rows.append({"arm": arm, "method": "GET", "route": "/user/42",
+                         "concurrency": 512, "requests_per_s": 2000 + repeat,
+                         "p50_ms": 1, "p75_ms": 2, "p90_ms": 3, "p99_ms": 4})
+    assert len(summarize(rows, 5, [512], "native-control", routes=(ROUTES[1],))) == 1
+    with pytest.raises(ValueError, match="incomplete"):
+        summarize(rows, 5, [512], "native-control")
+    with pytest.raises(ValueError, match="incomplete"):
+        summarize(rows[:-1], 5, [512], "native-control", routes=(ROUTES[1],))
