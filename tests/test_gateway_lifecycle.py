@@ -303,3 +303,44 @@ def test_lifecycle_source_uses_native_locks_and_keeps_callbacks_outside() -> Non
     assert "Never call them under the" in source
     assert "after the lifecycle lock has been released" in source
     assert "current.retire()\n        return True" in source
+
+
+def test_observed_state_follows_every_transition() -> None:
+    from pcc_gateway.lifecycle import STATE_NEW, STATE_STARTING
+
+    lifecycle = GatewayLifecycle({})
+    seen = [(lifecycle.state, lifecycle.observed_state)]
+    lifecycle.start()
+    seen.append((lifecycle.state, lifecycle.observed_state))
+    lifecycle.started()
+    seen.append((lifecycle.state, lifecycle.observed_state))
+    lifecycle.begin_drain()
+    seen.append((lifecycle.state, lifecycle.observed_state))
+    assert lifecycle.finish_drain()
+    seen.append((lifecycle.state, lifecycle.observed_state))
+    assert seen == [(state, state) for state in (
+        STATE_NEW, STATE_STARTING, STATE_RUNNING, STATE_DRAINING, STATE_STOPPED,
+    )]
+    failed = GatewayLifecycle({})
+    failed.start()
+    failed.fail("bind failed")
+    assert failed.state == failed.observed_state == STATE_FAILED
+
+
+def test_observed_state_is_written_with_each_locked_transition() -> None:
+    source = (REPO / "pcc_gateway" / "lifecycle.py").read_text(encoding="utf-8")
+    lines = source.split("\n")
+    assignments = [index for index, line in enumerate(lines)
+                   if line.strip().startswith("self._state = ")]
+    assert len(assignments) == 6
+    for index in assignments:
+        value = lines[index].split("=", 1)[1].strip()
+        follow = index + 1
+        while lines[follow].strip().startswith("#"):
+            follow += 1
+        assert lines[follow].strip() == "self.observed_state = " + value
+    server = (REPO / "pcc_gateway" / "server.py").read_text(encoding="utf-8")
+    accepted = server.split("def _gateway_accepted_entry", 1)[1].split("\ndef ", 1)[0]
+    # The publication/drain handshake still reads the locked state.
+    assert accepted.count("server.lifecycle.state != STATE_RUNNING") == 2
+    assert "observed_state" not in accepted

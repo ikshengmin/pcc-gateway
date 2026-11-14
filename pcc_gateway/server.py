@@ -729,7 +729,7 @@ class GatewayConnection:
             self.current_keep_alive
             and not self.close_after_flush
             and self.requests_completed + 1 < self.config.max_requests_per_connection
-            and self.lifecycle.state == STATE_RUNNING
+            and self.lifecycle.observed_state == STATE_RUNNING
         )
 
     def _begin_streaming_response(self, request, response, admitted: bool) -> None:
@@ -799,7 +799,7 @@ class GatewayConnection:
         if (
             not self.current_keep_alive
             or self.requests_completed >= self.config.max_requests_per_connection
-            or self.lifecycle.state != STATE_RUNNING
+            or self.lifecycle.observed_state != STATE_RUNNING
         ):
             self.close_after_flush = True
         if primary_error is not None:
@@ -1027,7 +1027,7 @@ class GatewayConnection:
         if (
             not self.current_keep_alive
             or self.requests_completed >= self.config.max_requests_per_connection
-            or self.lifecycle.state != STATE_RUNNING
+            or self.lifecycle.observed_state != STATE_RUNNING
         ):
             self.close_after_flush = True
 
@@ -1121,7 +1121,7 @@ class GatewayConnection:
         if (
             not self.current_keep_alive
             or self.requests_completed >= self.config.max_requests_per_connection
-            or self.lifecycle.state != STATE_RUNNING
+            or self.lifecycle.observed_state != STATE_RUNNING
         ):
             self.close_after_flush = True
 
@@ -2436,7 +2436,7 @@ def _run_gateway_proxy(connection: GatewayConnection) -> None:
                     not connection.current_keep_alive
                     or connection.requests_completed
                     >= connection.config.max_requests_per_connection
-                    or connection.lifecycle.state != STATE_RUNNING
+                    or connection.lifecycle.observed_state != STATE_RUNNING
                 ):
                     connection.close_after_flush = True
             except Exception as error:
@@ -2643,7 +2643,7 @@ def _run_gateway_connection(connection: GatewayConnection) -> None:
                 reason = "response-complete"
                 break
             if (
-                connection.lifecycle.state != STATE_RUNNING
+                connection.lifecycle.observed_state != STATE_RUNNING
                 and connection.current_request is None
             ):
                 reason = "drain"

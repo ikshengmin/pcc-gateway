@@ -329,6 +329,12 @@ class GatewayLifecycle:
         self.metrics = GatewayMetrics()
         self.metrics._lock = self._lock
         self._state = STATE_NEW
+        # Copy of ``_state`` written under ``_lock`` with every transition.
+        # An unlocked read is the same kind of snapshot ``state`` returns once
+        # its lock is released. Use it only for checks that need no ordering
+        # with other lifecycle data (per-request keep-alive/drain tests);
+        # publication handshakes keep the locked ``state``.
+        self.observed_state = STATE_NEW
         self._next_generation_id = 2
         self._current = GatewayGeneration(1, config, (), self._lock)
         self._retired_generations = []
@@ -375,6 +381,7 @@ class GatewayLifecycle:
             if self._state != STATE_NEW:
                 raise RuntimeError("gateway can start only once")
             self._state = STATE_STARTING
+            self.observed_state = STATE_STARTING
         finally:
             self._lock.release()
 
@@ -384,6 +391,7 @@ class GatewayLifecycle:
             if self._state != STATE_STARTING:
                 raise RuntimeError("gateway is not starting")
             self._state = STATE_RUNNING
+            self.observed_state = STATE_RUNNING
         finally:
             self._lock.release()
 
@@ -594,6 +602,7 @@ class GatewayLifecycle:
             if self._state not in (STATE_STARTING, STATE_RUNNING):
                 raise RuntimeError("gateway cannot enter drain from this state")
             self._state = STATE_DRAINING
+            self.observed_state = STATE_DRAINING
         finally:
             self._lock.release()
 
@@ -608,6 +617,7 @@ class GatewayLifecycle:
                 return False
             current = self._current
             self._state = STATE_STOPPED
+            self.observed_state = STATE_STOPPED
         finally:
             self._lock.release()
         # Resource/provider release may call arbitrary native code.
@@ -619,5 +629,6 @@ class GatewayLifecycle:
         try:
             self._failed_reason = reason
             self._state = STATE_FAILED
+            self.observed_state = STATE_FAILED
         finally:
             self._lock.release()
