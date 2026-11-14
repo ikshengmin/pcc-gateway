@@ -30,13 +30,24 @@ class BufferLimitError(RuntimeError):
 class BufferSegment:
     """One reference-counted, fixed-capacity storage owner."""
 
-    def __init__(self, capacity: int = 16384) -> None:
+    def __init__(self, capacity: int = 16384, frozen=None) -> None:
+        # ``frozen`` adopts an exact immutable ``bytes`` object as full,
+        # read-only storage: nothing can change it, so no private copy is needed.
+        if frozen is not None:
+            if type(frozen) is not bytes:
+                raise TypeError("only exact bytes can be adopted as segment storage")
+            capacity = len(frozen)
         if capacity <= 0:
             raise ValueError("buffer segment capacity must be positive")
         self.capacity = capacity
-        self.data = bytearray(capacity)
+        self.frozen = frozen
         self.start = 0
-        self.end = 0
+        if frozen is None:
+            self.data = bytearray(capacity)
+            self.end = 0
+        else:
+            self.data = bytearray(b"")
+            self.end = capacity
         self.references = 1
         self.released = False
 
@@ -55,6 +66,7 @@ class BufferSegment:
         if self.references == 0:
             self.released = True
             self.data = bytearray(b"")
+            self.frozen = None
             self.start = 0
             self.end = 0
             return 1
@@ -73,6 +85,8 @@ class BufferSegment:
     def write(self, source, offset: int = 0, length: int = -1) -> int:
         if self.released:
             raise BufferReleasedError("cannot write a released segment")
+        if self.frozen is not None:
+            raise ValueError("cannot write adopted immutable segment storage")
         source_length = len(source)
         if offset < 0 or offset > source_length:
             raise ValueError("source offset is out of range")
@@ -151,6 +165,11 @@ class BufferView:
         if length < 0 or offset + length > self.length:
             raise ValueError("buffer copy length is out of range")
         start = self.start + offset
+        frozen = self.owner.frozen
+        if frozen is not None:
+            if start == 0 and length == len(frozen):
+                return frozen
+            return frozen[start:start + length]
         return bytes(self.owner.data[start:start + length])
 
     def slice(self, offset: int = 0, length: int = -1):
@@ -221,6 +240,13 @@ class ChannelBuffer:
         source_length = len(source)
         if self.queued_bytes + source_length > self.max_bytes:
             raise BufferLimitError("channel buffer byte limit exceeded")
+        if type(source) is bytes and 0 < source_length <= self.segment_size:
+            # One immutable segment's worth: retain it instead of copying.
+            segment = BufferSegment(source_length, source)
+            self.views.append(segment.view(0, source_length))
+            segment.release()
+            self.queued_bytes += source_length
+            return self._transition_after_growth()
         offset = 0
         while offset < source_length:
             capacity = self.segment_size

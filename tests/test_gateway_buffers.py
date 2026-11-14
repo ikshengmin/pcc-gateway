@@ -246,3 +246,49 @@ def test_segment_custom_source_keeps_integer_index_calls():
     assert source.indices == [1, 2]
     assert owner.data == bytearray(b"BC\x00\x00")
     owner.release()
+
+
+@pytest.mark.parametrize("consumed", [0, 2, 6])
+@pytest.mark.parametrize("limit", [-1, 0, 3, 20])
+def test_exact_bytes_within_one_segment_are_retained_without_copy(consumed, limit):
+    channel = ChannelBuffer(8, 12, 24, 48)
+    payload = b"ab\x00\xffcdef"
+    assert channel.append(payload) == BACKPRESSURE_NONE
+    assert len(channel) == len(payload)
+    held = channel.peek_views()
+    owner = held[0].owner
+    assert owner.frozen is payload and owner.references == 2
+    if consumed == 0 and limit < 0:
+        assert channel.peek_bytes() is payload
+    channel.consume(consumed)
+    expected = payload[consumed:] if limit < 0 else payload[consumed:consumed + limit]
+    assert channel.peek_bytes(limit) == expected
+    assert len(channel) == len(payload) - consumed
+    channel.close()
+    assert owner.references == 1 and not owner.released
+    assert held[0].to_bytes() == payload and held[0].to_bytes(3, 2) == payload[3:5]
+    assert held[0].release() == 1
+    assert owner.released and owner.frozen is None
+
+
+def test_adopted_and_copied_appends_keep_fifo_order_and_watermarks():
+    channel = ChannelBuffer(4, 3, 6, 32)
+    mutable = bytearray(b"xyz")
+    assert channel.append(b"ab") == BACKPRESSURE_NONE
+    assert channel.append(mutable) == BACKPRESSURE_NONE
+    mutable[0] = 33
+    assert channel.append(b"0123456789") == BACKPRESSURE_HIGH
+    assert channel.read(4) == b"abxy"
+    assert channel.read() == b"z0123456789"
+    assert len(channel) == 0
+
+
+def test_adopted_segment_storage_is_read_only_and_exact_bytes_only():
+    owner = BufferSegment(1, b"abc")
+    assert (owner.capacity, owner.readable_bytes(), owner.writable_bytes()) == (3, 3, 0)
+    with pytest.raises(ValueError):
+        owner.write(b"d")
+    assert owner.view(1, 2).to_bytes() == b"bc"
+    for invalid in (bytearray(b"abc"), b""):
+        with pytest.raises((TypeError, ValueError)):
+            BufferSegment(4, invalid)

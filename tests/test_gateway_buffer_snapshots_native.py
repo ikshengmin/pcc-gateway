@@ -52,6 +52,22 @@ def main():
     if copied.data != bytearray(b"0123"):
         raise RuntimeError("mutable source bytes")
     copied.release()
+    adopted = ChannelBuffer(8, 12, 24, 48)
+    payload = b"ab\x00\xffcdef"
+    mutable = bytearray(b"xyz")
+    adopted.append(payload)
+    adopted.append(mutable)
+    mutable[0] = 33
+    kept = adopted.peek_views()
+    if adopted.peek_bytes(8) is not payload or kept[0].owner.frozen is not payload:
+        raise RuntimeError("adopted bytes")
+    adopted.consume(3)
+    if adopted.read() != b"\xffcdefxyz" or len(adopted) != 0:
+        raise RuntimeError("adopted fifo")
+    adopted.close()
+    if kept[0].to_bytes(2, 3) != b"\x00\xffc" or kept[0].release() != 1:
+        raise RuntimeError("adopted view lifetime")
+    kept[1].release()
     print("BUFFER_SNAPSHOT_OK")
 main()
 """
