@@ -396,10 +396,17 @@ class GatewayLifecycle:
             self._lock.release()
 
     def acquire_generation(self):
+        generation = self.try_acquire_generation()
+        if generation is None:
+            raise RuntimeError("gateway is not accepting new work")
+        return generation
+
+    def try_acquire_generation(self):
+        """Acquire a lease, or decline cleanly if admission has stopped."""
         self._lock.acquire()
         try:
             if self._state != STATE_RUNNING:
-                raise RuntimeError("gateway is not accepting new work")
+                return None
             # Lifecycle-managed generations share this lock, so increment the
             # reference directly without recursively acquiring it.
             self._current._retain_locked()

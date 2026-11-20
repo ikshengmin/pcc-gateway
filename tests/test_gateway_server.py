@@ -2182,7 +2182,7 @@ def test_generation_capture_cancellation_closes_admitted_socket(monkeypatch, ent
     def interrupted():
         raise GeneratorExit()
 
-    monkeypatch.setattr(server.lifecycle, "acquire_generation", interrupted)
+    monkeypatch.setattr(server.lifecycle, "try_acquire_generation", interrupted)
     with pytest.raises(GeneratorExit):
         getattr(server, entry)()
     assert transport.closed == [52]

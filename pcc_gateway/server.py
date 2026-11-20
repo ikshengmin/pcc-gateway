@@ -2998,9 +2998,16 @@ class GatewayServer:
                     admitted = True
                     self.generation_lock.acquire()
                     try:
-                        generation = self.lifecycle.acquire_generation()
+                        generation = self.lifecycle.try_acquire_generation()
                     finally:
                         self.generation_lock.release()
+                    if generation is None:
+                        # Drain won after socket admission, before the
+                        # generation lease. Undo the admission exactly once.
+                        socket_owned = False
+                        virtual_thread.call(self._discard_accepted_connection, fd, None)
+                        progress = 1
+                        break
                     pending.append((fd, client_ip, generation))
                     socket_owned = False
                 except BaseException:
